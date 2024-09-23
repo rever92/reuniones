@@ -1,24 +1,43 @@
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { supabase } from './supabaseClient';
+import Auth from './components/Auth';
+import ProjectManager from './components/ProjectManager';
+import ProjectPage from './components/ProjectPage';
+import ConsultantManager from './components/ConsultantManager';
 
 function App() {
+  const [session, setSession] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (!session) {
+    return <Auth />;
+  }
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div className="App">
+        <h1>Bienvenido, {session.user.email}</h1>
+        <ConsultantManager user={session.user} />
+        <Routes>
+          <Route path="/" element={<ProjectManager user={session.user} />} />
+          <Route path="/project/:projectId" element={<ProjectPage user={session.user} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <button onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+      </div>
+    </Router>
   );
 }
 

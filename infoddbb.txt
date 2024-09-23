@@ -1,0 +1,232 @@
+# Documentación actualizada de Supabase para la Aplicación de Gestión de Proyectos y Reuniones
+
+## Estructura de la Base de Datos
+
+### Tabla: projects
+- `id`: BIGSERIAL PRIMARY KEY
+- `name`: TEXT
+- `created_at`: TIMESTAMPTZ DEFAULT NOW()
+- `created_by`: UUID REFERENCES auth.users(id)
+
+### Tabla: consultants
+- `id`: BIGSERIAL PRIMARY KEY
+- `user_id`: UUID REFERENCES auth.users(id)
+- `name`: TEXT
+- `email`: TEXT
+- `role`: TEXT
+
+### Tabla: project_consultants
+- `id`: BIGSERIAL PRIMARY KEY
+- `project_id`: BIGINT REFERENCES projects(id)
+- `consultant_id`: BIGINT REFERENCES consultants(id)
+- `role`: TEXT
+
+### Tabla: meetings
+- `id`: BIGSERIAL PRIMARY KEY
+- `project_id`: BIGINT REFERENCES projects(id)
+- `name`: TEXT
+- `duration`: INTEGER
+
+### Tabla: meeting_participants
+- `id`: BIGSERIAL PRIMARY KEY
+- `meeting_id`: BIGINT REFERENCES meetings(id)
+- `consultant_id`: BIGINT REFERENCES consultants(id)
+
+### Tabla: availabilities
+- `id`: BIGSERIAL PRIMARY KEY
+- `consultant_id`: BIGINT REFERENCES consultants(id)
+- `project_id`: BIGINT REFERENCES projects(id)
+- `date`: DATE
+- `time`: TIME
+- `is_available`: BOOLEAN
+
+## Políticas de Seguridad Actualizadas
+
+### Tabla: availabilities
+```sql
+CREATE POLICY "Allow users to manage their own availability" 
+ON availabilities FOR ALL 
+TO authenticated
+USING (
+  consultant_id IN (
+    SELECT id FROM consultants WHERE user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Allow directors to view all availabilities in their projects" 
+ON availabilities FOR SELECT 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE pc.project_id = availabilities.project_id
+    AND c.user_id = auth.uid()
+    AND pc.role = 'director'
+  )
+);
+```
+
+### Tabla: consultants
+```sql
+CREATE POLICY "Enable read access for all users" 
+ON consultants FOR SELECT 
+TO authenticated
+USING (true);
+
+CREATE POLICY "Allow users to update their own consultant profile" 
+ON consultants FOR UPDATE 
+TO authenticated
+USING (user_id = auth.uid());
+```
+
+### Tabla: meeting_participants
+```sql
+CREATE POLICY "Allow access to meeting participants for project members" 
+ON meeting_participants FOR ALL 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM meetings m
+    JOIN project_consultants pc ON pc.project_id = m.project_id
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE m.id = meeting_participants.meeting_id
+    AND c.user_id = auth.uid()
+  )
+);
+```
+
+### Tabla: meetings
+```sql
+CREATE POLICY "Allow access to meetings for project members" 
+ON meetings FOR SELECT 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE pc.project_id = meetings.project_id
+    AND c.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Allow directors to manage meetings" 
+ON meetings FOR ALL 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE pc.project_id = meetings.project_id
+    AND c.user_id = auth.uid()
+    AND pc.role = 'director'
+  )
+);
+```
+
+### Tabla: project_consultants
+```sql
+CREATE POLICY "Allow directors to manage project consultants" 
+ON project_consultants FOR ALL 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE pc.project_id = project_consultants.project_id
+    AND c.user_id = auth.uid()
+    AND pc.role = 'director'
+  )
+);
+
+CREATE POLICY "Allow consultants to view their project assignments" 
+ON project_consultants FOR SELECT 
+TO authenticated
+USING (
+  consultant_id IN (
+    SELECT id FROM consultants WHERE user_id = auth.uid()
+  )
+);
+```
+
+### Tabla: projects
+```sql
+CREATE POLICY "Allow users to view their own projects" 
+ON projects FOR SELECT 
+TO authenticated
+USING (
+  id IN (
+    SELECT project_id FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE c.user_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Allow directors to manage projects" 
+ON projects FOR ALL 
+TO authenticated
+USING (
+  id IN (
+    SELECT project_id FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE c.user_id = auth.uid() AND pc.role = 'director'
+  )
+);
+```
+
+## Funciones RPC
+
+### create_project_and_assign_director
+```sql
+CREATE OR REPLACE FUNCTION create_project_and_assign_director(project_name TEXT, user_id UUID)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    new_project_id BIGINT;
+    consultant_id BIGINT;
+BEGIN
+    -- Obtener el ID del consultor
+    SELECT id INTO consultant_id FROM consultants WHERE user_id = $2;
+    
+    IF consultant_id IS NULL THEN
+        RAISE EXCEPTION 'Consultor no encontrado';
+    END IF;
+
+    -- Crear el proyecto
+    INSERT INTO projects (name, created_by)
+    VALUES ($1, $2)
+    RETURNING id INTO new_project_id;
+
+    -- Asignar el consultor como director del proyecto
+    INSERT INTO project_consultants (project_id, consultant_id, role)
+    VALUES (new_project_id, consultant_id, 'director');
+
+    -- Devolver los datos del nuevo proyecto
+    RETURN json_build_object(
+        'id', new_project_id,
+        'name', $1,
+        'created_by', $2
+    );
+END;
+$$;
+```
+
+## Notas Adicionales
+
+1. La tabla `consultants` tiene un campo `role` que puede ser 'admin', 'director', o 'consultant'. Este rol es global y diferente del rol específico del proyecto en `project_consultants`.
+
+2. La función RPC `create_project_and_assign_director` se utiliza para crear un nuevo proyecto y asignar automáticamente al creador como director del proyecto.
+
+3. Las nuevas políticas de seguridad están diseñadas para:
+   - Permitir a los usuarios gestionar su propia disponibilidad.
+   - Permitir a los directores ver y gestionar toda la información relacionada con sus proyectos.
+   - Permitir a los consultores ver la información de los proyectos a los que están asignados.
+   - Restringir el acceso a la información de proyectos y reuniones solo a los miembros del proyecto.
+
+4. La gestión de disponibilidad permite que los usuarios manejen su propia disponibilidad, mientras que los directores pueden ver la disponibilidad de todos los consultores en sus proyectos.
+
+5. La estructura actual permite que un consultor tenga diferentes roles en diferentes proyectos, proporcionando flexibilidad en la gestión de proyectos.
+
+6. Todas las políticas utilizan `auth.uid()` para identificar al usuario autenticado y determinar sus permisos basados en su rol y asignaciones de proyecto.

@@ -1,0 +1,62 @@
+contraseña bbdd supabase = estrategiaDigital1.
+
+
+Crea una aplicación en la que pueda cuadrar la disponibilidad de varias personas para una reunión. En ella debería poder:
+Crear las reuniones necesarias (nombre y duración en franjas de media hora (medai hora, una hora, hora y media, ...)
+Crear diferentes personas
+Asignar las personas que tienen que estar en cada reunión
+Asignar la disponibilidad por día y franja de media hora que tiene cada uno
+
+Con todo esto, la aplicación debería mostrarme cuáles son las opciones en la que todas las personas que tienen que participar en una reunión están disponibles
+
+
+-- Tabla projects (sin cambios)
+CREATE TABLE projects (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id)
+);
+
+-- Tabla consultants (actualizada)
+CREATE TABLE consultants (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  name TEXT,
+  email TEXT,
+  role TEXT -- Nuevo campo para almacenar el rol del consultor
+);
+
+-- Tabla project_consultants (sin cambios)
+CREATE TABLE project_consultants (
+  id BIGSERIAL PRIMARY KEY,
+  project_id BIGINT REFERENCES projects(id),
+  consultant_id BIGINT REFERENCES consultants(id),
+  role TEXT
+);
+
+-- Tabla meetings (sin cambios)
+CREATE TABLE meetings (
+  id BIGSERIAL PRIMARY KEY,
+  project_id BIGINT REFERENCES projects(id),
+  name TEXT,
+  duration INTEGER
+);
+
+-- Tabla meeting_participants (sin cambios)
+CREATE TABLE meeting_participants (
+  id BIGSERIAL PRIMARY KEY,
+  meeting_id BIGINT REFERENCES meetings(id),
+  consultant_id BIGINT REFERENCES consultants(id)
+);
+
+-- Tabla availabilities (sin cambios)
+CREATE TABLE availabilities (
+  id BIGSERIAL PRIMARY KEY,
+  consultant_id BIGINT REFERENCES consultants(id),
+  project_id BIGINT REFERENCES projects(id),
+  date DATE,
+  time TIME,
+  is_available BOOLEAN
+);
+
