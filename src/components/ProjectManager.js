@@ -33,6 +33,7 @@ const ProjectManager = ({ user }) => {
       setIsAdmin(data.role === 'admin');
     } catch (error) {
       console.error('Error checking admin status:', error);
+      setError('Error al verificar el estado de administrador');
     }
   };
 
@@ -40,19 +41,47 @@ const ProjectManager = ({ user }) => {
     setIsLoading(true);
     setError(null);
     try {
-      let { data, error, status } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('created_by', user.id);
-
-      if (error && status !== 406) throw error;
-
-      if (data === null) {
-        setProjects([]);
-      } else {
-        setProjects(data);
+      // Primero, obtén el ID del consultor actual
+      const { data: consultantData, error: consultantError } = await supabase
+        .from('consultants')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+  
+      if (consultantError && consultantError.code !== 'PGRST116') {
+        throw consultantError;
       }
+  
+      let projectsData;
+      if (consultantData) {
+        // Si el usuario es un consultor, obtén sus proyectos asignados
+        const { data, error } = await supabase
+          .from('project_consultants')
+          .select(`
+            project_id,
+            projects:project_id (
+              id,
+              name,
+              created_at
+            )
+          `)
+          .eq('consultant_id', consultantData.id);
+  
+        if (error) throw error;
+        projectsData = data.map(item => item.projects).filter(Boolean);
+      } else {
+        // Si el usuario no es un consultor, muestra todos los proyectos
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*');
+  
+        if (error) throw error;
+        projectsData = data;
+      }
+  
+      setProjects(projectsData);
     } catch (error) {
+      console.error('Error fetching projects:', error);
       setError('No se pudieron cargar los proyectos. Por favor, intenta de nuevo.');
     } finally {
       setIsLoading(false);
@@ -65,20 +94,16 @@ const ProjectManager = ({ user }) => {
   
     setError(null);
     try {
-      console.log('Creating project with:', { project_name: newProjectName, user_id: user.id });
       const { data, error } = await supabase.rpc('create_project_and_assign_director', {
         project_name: newProjectName,
-        user_id: user.id
+        auth_user_id: user.id  // Cambiado de user_id a auth_user_id
       });
   
-      if (error) {
-        console.error('Error details:', error);
-        throw error;
-      }
+      if (error) throw error;
   
       console.log('Project created successfully:', data);
       setNewProjectName('');
-      setProjects(prevProjects => [...prevProjects, data]);
+      fetchProjects();  // Actualizar la lista de proyectos
     } catch (error) {
       console.error('Error creating project:', error);
       setError('No se pudo crear el proyecto. Por favor, intenta de nuevo.');
@@ -98,12 +123,16 @@ const ProjectManager = ({ user }) => {
         <p style={{ color: 'red' }}>{error}</p>
       ) : (
         <div className="project-grid">
-          {projects.map(project => (
-            <div key={project.id} className="project-card" onClick={() => handleProjectClick(project.id)}>
-              <h3>{project.name}</h3>
-              <p>Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
-            </div>
-          ))}
+          {projects.length === 0 ? (
+            <p>No tienes proyectos asignados.</p>
+          ) : (
+            projects.map(project => (
+              <div key={project.id} className="project-card" onClick={() => handleProjectClick(project.id)}>
+                <h3>{project.name}</h3>
+                <p>Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
+              </div>
+            ))
+          )}
         </div>
       )}
       {isAdmin && (

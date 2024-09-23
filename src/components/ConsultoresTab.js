@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import ConsultantManager from './ConsultantManager';
 
-const ConsultoresTab = ({ project, userRole, consultant }) => {
+const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant }) => {
   const [consultants, setConsultants] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
-  const [showNewConsultantModal, setShowNewConsultantModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -43,21 +41,37 @@ const ConsultoresTab = ({ project, userRole, consultant }) => {
   };
 
   const assignConsultant = async (consultantId) => {
-    const { error } = await supabase
-      .from('project_consultants')
-      .insert({ project_id: project.id, consultant_id: consultantId, role: 'consultant' });
-
-    if (error) {
-      console.error('Error assigning consultant:', error);
-    } else {
+    console.log('Attempting to assign consultant. User role:', userRole);
+    console.log('Project:', project);
+    console.log('Consultant:', consultant);
+  
+    if (userRole !== 'director' && consultant.role !== 'admin') {
+      console.error('Solo los directores o administradores pueden asignar consultores');
+      return;
+    }
+  
+    try {
+      const { data, error } = await supabase
+        .from('project_consultants')
+        .insert({ project_id: project.id, consultant_id: consultantId, role: 'consultant' })
+        .select();
+  
+      if (error) throw error;
+  
+      console.log('Consultant assigned successfully:', data);
       fetchConsultants();
       setSearchResults([]);
+    } catch (error) {
+      console.error('Error assigning consultant:', error);
+      console.error('Error details:', error.details, error.hint, error.message);
+      // Aquí puedes mostrar un mensaje de error al usuario
     }
   };
 
   return (
     <div>
       <h2>Consultores del Proyecto</h2>
+      <p>User Role: {userRole}</p>
       {userRole === 'director' && (
         <>
           <input
@@ -67,7 +81,7 @@ const ConsultoresTab = ({ project, userRole, consultant }) => {
             placeholder="Buscar consultores..."
           />
           <button onClick={searchConsultants}>Buscar</button>
-          <button onClick={() => setShowNewConsultantModal(true)}>Nuevo Consultor</button>
+          <button onClick={onNewConsultant}>Nuevo Consultor</button>
         </>
       )}
       <ul>
@@ -75,7 +89,7 @@ const ConsultoresTab = ({ project, userRole, consultant }) => {
           <li key={c.id}>{c.name} - {c.email}</li>
         ))}
       </ul>
-      {searchResults.length > 0 && (
+      {searchResults.length > 0 && userRole === 'director' && (
         <div>
           <h3>Resultados de búsqueda:</h3>
           <ul>
@@ -87,15 +101,6 @@ const ConsultoresTab = ({ project, userRole, consultant }) => {
             ))}
           </ul>
         </div>
-      )}
-      {showNewConsultantModal && (
-        <ConsultantManager
-          onClose={() => setShowNewConsultantModal(false)}
-          onConsultantCreated={(newConsultant) => {
-            assignConsultant(newConsultant.id);
-            setShowNewConsultantModal(false);
-          }}
-        />
       )}
     </div>
   );

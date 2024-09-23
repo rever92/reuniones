@@ -4,6 +4,8 @@ import { supabase } from '../supabaseClient';
 import ConsultoresTab from './ConsultoresTab';
 import ReunionesTab from './ReunionesTab';
 import DisponibilidadTab from './DisponibilidadTab';
+import Popup from './Popup';
+import ConsultantManager from './ConsultantManager';
 
 const ProjectPage = ({ user }) => {
   const { projectId } = useParams();
@@ -13,6 +15,7 @@ const ProjectPage = ({ user }) => {
   const [activeTab, setActiveTab] = useState('consultores');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -85,7 +88,7 @@ const ProjectPage = ({ user }) => {
         .eq('project_id', projectId)
         .eq('consultant_id', consultant.id)
         .single();
-
+  
       if (error) {
         if (error.code === 'PGRST116') {
           console.log('User has no role in this project');
@@ -94,12 +97,18 @@ const ProjectPage = ({ user }) => {
           throw error;
         }
       } else {
+        console.log('User role fetched:', data.role);
         setUserRole(data.role);
       }
     } catch (error) {
       console.error('Error fetching user role:', error);
       setError('Error al obtener el rol del usuario');
     }
+  };
+
+  const handleConsultantCreated = (newConsultant) => {
+    setIsPopupOpen(false);
+    // Aquí puedes agregar lógica adicional si es necesario
   };
 
   if (isLoading) return <p>Cargando proyecto...</p>;
@@ -110,7 +119,7 @@ const ProjectPage = ({ user }) => {
     <div className="project-page">
       <h1>Proyecto: {project.name}</h1>
       <p>Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
-      
+
       <div className="tabs">
         <button onClick={() => setActiveTab('consultores')}>Consultores</button>
         <button onClick={() => setActiveTab('reuniones')}>Reuniones</button>
@@ -118,28 +127,36 @@ const ProjectPage = ({ user }) => {
       </div>
 
       {activeTab === 'consultores' && (
-        <ConsultoresTab 
-          project={project} 
-          userRole={userRole} 
+        <ConsultoresTab
+          project={project}
+          userRole={userRole}
           consultant={consultant}
+          onNewConsultant={() => setIsPopupOpen(true)}
         />
       )}
       {activeTab === 'reuniones' && (
-        <ReunionesTab 
-          project={project} 
-          userRole={userRole} 
+        <ReunionesTab
+          project={project}
+          userRole={userRole}
           consultant={consultant}
         />
       )}
       {activeTab === 'disponibilidad' && (
-        <DisponibilidadTab 
-          project={project} 
-          userRole={userRole} 
+        <DisponibilidadTab
+          project={project}
+          userRole={userRole}
           consultant={consultant}
         />
       )}
+
+      <Popup isOpen={isPopupOpen} onClose={() => setIsPopupOpen(false)}>
+        <ConsultantManager
+          user={user}
+          onClose={() => setIsPopupOpen(false)}
+          onConsultantCreated={handleConsultantCreated}
+        />
+      </Popup>
     </div>
   );
 };
-
 export default ProjectPage;

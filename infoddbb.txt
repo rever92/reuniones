@@ -42,37 +42,59 @@
 
 ## Políticas de Seguridad Actualizadas
 
-### Tabla: availabilities
+### Tabla: projects
 ```sql
-CREATE POLICY "Allow users to manage their own availability" 
-ON availabilities FOR ALL 
-TO authenticated
-USING (
-  consultant_id IN (
-    SELECT id FROM consultants WHERE user_id = auth.uid()
-  )
-);
-
-CREATE POLICY "Allow directors to view all availabilities in their projects" 
-ON availabilities FOR SELECT 
+CREATE POLICY "Allow users to view their assigned projects" 
+ON projects FOR SELECT 
 TO authenticated
 USING (
   EXISTS (
-    SELECT 1 FROM project_consultants pc
-    JOIN consultants c ON c.id = pc.consultant_id
-    WHERE pc.project_id = availabilities.project_id
-    AND c.user_id = auth.uid()
-    AND pc.role = 'director'
+    SELECT 1 FROM project_consultants
+    WHERE project_id = projects.id AND consultant_id IN (
+      SELECT id FROM consultants WHERE user_id = auth.uid()
+    )
+  )
+);
+
+CREATE POLICY "Allow directors to manage projects" 
+ON projects FOR ALL 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM project_consultants
+    WHERE project_id = projects.id 
+    AND consultant_id IN (SELECT id FROM consultants WHERE user_id = auth.uid())
+    AND role = 'director'
   )
 );
 ```
 
 ### Tabla: consultants
 ```sql
-CREATE POLICY "Enable read access for all users" 
+CREATE POLICY "Enable read access for all authenticated users" 
 ON consultants FOR SELECT 
 TO authenticated
 USING (true);
+
+CREATE POLICY "Allow admins to insert new consultants" 
+ON consultants FOR INSERT 
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM consultants
+    WHERE user_id = auth.uid() AND role = 'admin'
+  )
+);
+
+CREATE POLICY "Allow admins to delete consultants" 
+ON consultants FOR DELETE 
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM consultants
+    WHERE user_id = auth.uid() AND role = 'admin'
+  )
+);
 
 CREATE POLICY "Allow users to update their own consultant profile" 
 ON consultants FOR UPDATE 
@@ -80,18 +102,34 @@ TO authenticated
 USING (user_id = auth.uid());
 ```
 
-### Tabla: meeting_participants
+### Tabla: project_consultants
 ```sql
-CREATE POLICY "Allow access to meeting participants for project members" 
-ON meeting_participants FOR ALL 
+CREATE POLICY "Allow users to view their project assignments" 
+ON project_consultants FOR SELECT 
+TO authenticated
+USING (
+  consultant_id IN (SELECT id FROM consultants WHERE user_id = auth.uid())
+);
+
+CREATE POLICY "Allow directors to manage project consultants" 
+ON project_consultants FOR ALL 
 TO authenticated
 USING (
   EXISTS (
-    SELECT 1 FROM meetings m
-    JOIN project_consultants pc ON pc.project_id = m.project_id
+    SELECT 1 FROM project_consultants pc
     JOIN consultants c ON c.id = pc.consultant_id
-    WHERE m.id = meeting_participants.meeting_id
+    WHERE pc.project_id = project_consultants.project_id
     AND c.user_id = auth.uid()
+    AND pc.role = 'director'
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM project_consultants pc
+    JOIN consultants c ON c.id = pc.consultant_id
+    WHERE pc.project_id = project_consultants.project_id
+    AND c.user_id = auth.uid()
+    AND pc.role = 'director'
   )
 );
 ```
@@ -124,52 +162,43 @@ USING (
 );
 ```
 
-### Tabla: project_consultants
+### Tabla: meeting_participants
 ```sql
-CREATE POLICY "Allow directors to manage project consultants" 
-ON project_consultants FOR ALL 
+CREATE POLICY "Allow access to meeting participants for project members" 
+ON meeting_participants FOR ALL 
 TO authenticated
 USING (
   EXISTS (
-    SELECT 1 FROM project_consultants pc
+    SELECT 1 FROM meetings m
+    JOIN project_consultants pc ON pc.project_id = m.project_id
     JOIN consultants c ON c.id = pc.consultant_id
-    WHERE pc.project_id = project_consultants.project_id
+    WHERE m.id = meeting_participants.meeting_id
     AND c.user_id = auth.uid()
-    AND pc.role = 'director'
   )
 );
+```
 
-CREATE POLICY "Allow consultants to view their project assignments" 
-ON project_consultants FOR SELECT 
+### Tabla: availabilities
+```sql
+CREATE POLICY "Allow users to manage their own availability" 
+ON availabilities FOR ALL 
 TO authenticated
 USING (
   consultant_id IN (
     SELECT id FROM consultants WHERE user_id = auth.uid()
   )
 );
-```
 
-### Tabla: projects
-```sql
-CREATE POLICY "Allow users to view their own projects" 
-ON projects FOR SELECT 
+CREATE POLICY "Allow directors to view all availabilities in their projects" 
+ON availabilities FOR SELECT 
 TO authenticated
 USING (
-  id IN (
-    SELECT project_id FROM project_consultants pc
+  EXISTS (
+    SELECT 1 FROM project_consultants pc
     JOIN consultants c ON c.id = pc.consultant_id
-    WHERE c.user_id = auth.uid()
-  )
-);
-
-CREATE POLICY "Allow directors to manage projects" 
-ON projects FOR ALL 
-TO authenticated
-USING (
-  id IN (
-    SELECT project_id FROM project_consultants pc
-    JOIN consultants c ON c.id = pc.consultant_id
-    WHERE c.user_id = auth.uid() AND pc.role = 'director'
+    WHERE pc.project_id = availabilities.project_id
+    AND c.user_id = auth.uid()
+    AND pc.role = 'director'
   )
 );
 ```
@@ -178,7 +207,7 @@ USING (
 
 ### create_project_and_assign_director
 ```sql
-CREATE OR REPLACE FUNCTION create_project_and_assign_director(project_name TEXT, user_id UUID)
+CREATE OR REPLACE FUNCTION create_project_and_assign_director(project_name TEXT, auth_user_id UUID)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -188,7 +217,7 @@ DECLARE
     consultant_id BIGINT;
 BEGIN
     -- Obtener el ID del consultor
-    SELECT id INTO consultant_id FROM consultants WHERE user_id = $2;
+    SELECT id INTO consultant_id FROM consultants WHERE user_id = auth_user_id;
     
     IF consultant_id IS NULL THEN
         RAISE EXCEPTION 'Consultor no encontrado';
@@ -196,7 +225,7 @@ BEGIN
 
     -- Crear el proyecto
     INSERT INTO projects (name, created_by)
-    VALUES ($1, $2)
+    VALUES (project_name, auth_user_id)
     RETURNING id INTO new_project_id;
 
     -- Asignar el consultor como director del proyecto
@@ -206,8 +235,8 @@ BEGIN
     -- Devolver los datos del nuevo proyecto
     RETURN json_build_object(
         'id', new_project_id,
-        'name', $1,
-        'created_by', $2
+        'name', project_name,
+        'created_by', auth_user_id
     );
 END;
 $$;
@@ -219,7 +248,7 @@ $$;
 
 2. La función RPC `create_project_and_assign_director` se utiliza para crear un nuevo proyecto y asignar automáticamente al creador como director del proyecto.
 
-3. Las nuevas políticas de seguridad están diseñadas para:
+3. Las políticas de seguridad están diseñadas para:
    - Permitir a los usuarios gestionar su propia disponibilidad.
    - Permitir a los directores ver y gestionar toda la información relacionada con sus proyectos.
    - Permitir a los consultores ver la información de los proyectos a los que están asignados.

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
-const Auth = () => {
+const Auth = ({ onAuthStateChange }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,21 +40,24 @@ const Auth = () => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data.user) {
-        // Obtener la información del consultor
         const { data: consultant, error: consultantError } = await supabase
           .from('consultants')
           .select('*')
           .eq('user_id', data.user.id)
           .single();
+        
         if (consultantError) {
           if (consultantError.code === 'PGRST116') {
             console.log('User is not a consultant');
+            // Aquí podrías manejar el caso de un usuario que no es consultor
           } else {
             throw consultantError;
           }
+        } else {
+          console.log('Inicio de sesión exitoso', consultant);
+          // Llamar a la función onAuthStateChange con la información del usuario y consultor
+          onAuthStateChange({ user: data.user, consultant });
         }
-        // Aquí podrías guardar la información del consultor en el estado global de tu aplicación
-        console.log('Inicio de sesión exitoso', consultant);
       } else {
         alert('Algo salió mal. Por favor, intenta de nuevo.');
       }

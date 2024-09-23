@@ -4,7 +4,6 @@ import { supabase } from './supabaseClient';
 import Auth from './components/Auth';
 import ProjectManager from './components/ProjectManager';
 import ProjectPage from './components/ProjectPage';
-import ConsultantManager from './components/ConsultantManager';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -29,7 +28,6 @@ function App() {
     <Router>
       <div className="App">
         <h1>Bienvenido, {session.user.email}</h1>
-        <ConsultantManager user={session.user} />
         <Routes>
           <Route path="/" element={<ProjectManager user={session.user} />} />
           <Route path="/project/:projectId" element={<ProjectPage user={session.user} />} />
