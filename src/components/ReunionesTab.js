@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import Popup from './Popup';
+import '../styles/ReunionesTab.css';
 
 const ReunionesTab = ({ project, userRole, consultant }) => {
   const [reuniones, setReuniones] = useState([]);
@@ -135,14 +136,14 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
 
   return (
-    <div>
+    <div className="card reuniones-container">
       <h2>Reuniones del Proyecto</h2>
       {userRole === 'director' && (
-        <button onClick={() => handleEditReunion({ name: '', duration: 30, participants: [] })}>
+        <button className="btn btn-primary" onClick={() => handleEditReunion({ name: '', duration: 30, participants: [] })}>
           Crear Nueva Reunión
         </button>
       )}
-      <table>
+      <table className="reuniones-table">
         <thead>
           <tr>
             <th>Nombre</th>
@@ -161,8 +162,8 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
               </td>
               {userRole === 'director' && (
                 <td>
-                  <button onClick={() => handleEditReunion(reunion)}>Editar</button>
-                  <button onClick={() => handleDeleteReunion(reunion.id)}>Eliminar</button>
+                  <button className="btn btn-secondary" onClick={() => handleEditReunion(reunion)}>Editar</button>
+                  <button className="btn btn-secondary" onClick={() => handleDeleteReunion(reunion.id)}>Eliminar</button>
                 </td>
               )}
             </tr>
@@ -203,35 +204,41 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="edit-reunion-form">
       <input
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Nombre de la reunión"
         required
+        className="form-control"
       />
       <select
         value={duration}
         onChange={(e) => setDuration(parseInt(e.target.value))}
+        className="form-control"
       >
         {[30, 60, 90, 120].map(d => (
           <option key={d} value={d}>{d} minutos</option>
         ))}
       </select>
       <h4>Participantes:</h4>
-      {consultants.map(consultant => (
-        <label key={consultant.id}>
-          <input
-            type="checkbox"
-            checked={participants.includes(consultant.id)}
-            onChange={() => toggleParticipant(consultant.id)}
-          />
-          {consultant.name}
-        </label>
-      ))}
-      <button type="submit">Guardar</button>
-      <button type="button" onClick={onCancel}>Cancelar</button>
+      <div className="participants-list">
+        {consultants.map(consultant => (
+          <label key={consultant.id} className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={participants.includes(consultant.id)}
+              onChange={() => toggleParticipant(consultant.id)}
+            />
+            {consultant.name}
+          </label>
+        ))}
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn btn-primary">Guardar</button>
+        <button type="button" onClick={onCancel} className="btn btn-secondary">Cancelar</button>
+      </div>
     </form>
   );
 };

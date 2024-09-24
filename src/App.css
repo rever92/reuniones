@@ -1,38 +1,312 @@
-.App {
-  text-align: center;
+/* Estilos generales */
+body {
+  font-family: 'Roboto', 'Arial', sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f4f4f4;
+  margin: 0;
+  padding: 0;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* Paleta de colores */
+:root {
+  --primary-color: #ff0099;
+  --secondary-color: #2ecc71;
+  --accent-color: #e74c3c;
+  --text-color: #2c3e50;
+  --background-color: #ecf0f1;
+  --card-background: #ffffff;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+/* Tipografía */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-color);
+  margin-bottom: 0.5em;
+}
+
+/* Botones */
+.btn {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.1s ease;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
   color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.btn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* Tarjetas */
+.card {
+  background-color: var(--card-background);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  transform: translateY(-5px);
+}
+
+/* Formularios */
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+/* Pestaña de Disponibilidad */
+.disponibilidad-container {
+  background-color: var(--card-background);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.calendario {
+  overflow-x: auto;
+}
+
+.calendario table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.calendario th, .calendario td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: center;
+}
+
+.calendario th {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.disponibilidad-boton {
+  width: 30px;
+  height: 30px;
+  margin: 2px;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.disponibilidad-boton:hover {
+  transform: scale(1.1);
+}
+
+.disponibilidad-boton.disponible {
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.disponibilidad-boton.no-disponible {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+/* Pestaña de Consultores */
+.consultores-container {
+  background-color: var(--card-background);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.consultores-list {
+  list-style-type: none;
+  padding: 0;
+}
+
+.consultor-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  margin-bottom: 10px;
+  background-color: var(--background-color);
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.consultor-item:hover {
+  background-color: #e0e0e0;
+}
+
+.search-bar {
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.search-bar input {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+}
+
+.search-bar button {
+  padding: 10px 20px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+
+/* Estilos responsivos */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
   }
-  to {
-    transform: rotate(360deg);
+
+  .card {
+    padding: 15px;
   }
+
+  .consultores-list, .calendario table {
+    font-size: 14px;
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
+
+  .search-bar input, .search-bar button {
+    width: 100%;
+    margin-bottom: 10px;
+    border-radius: 4px;
+  }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+/* Accesibilidad */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Tooltips */
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 0;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
+
+.tab-navigation {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  padding: 10px 20px;
+  background-color: #aaa8a8;
+  border: none;
+  border-radius: 5px 5px 0 0;
+  margin-right: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.tab-button:hover {
+  background-color: #e0e0e0;
+}
+
+.tab-button.active {
+  background-color: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-bottom: 2px solid #ffffff;
+  margin-bottom: -2px;
+  font-weight: bold;
+  color: #ff0099;
+}
+
+.tab-content {
+  background-color: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-top: none;
+  padding: 20px;
+  border-radius: 0 0 5px 5px;
+}
+
+/* Asegúrate de que estos estilos no sean sobrescritos por otros */
+.project-page .tab-navigation {
+  margin-top: 20px;
+}
+
+.project-page .tab-button {
+  border: 2px solid #e0e0e0;
+  border-bottom: none;
 }

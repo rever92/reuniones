@@ -8,32 +8,41 @@ const ProjectManager = ({ user }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user && user.id) {
+      console.log("User detected, fetching data...");
       fetchProjects();
-      checkAdminStatus();
+      checkUserRole();
     } else {
+      console.log("No user detected");
       setError("Error: Usuario no válido");
       setIsLoading(false);
     }
   }, [user]);
 
-  const checkAdminStatus = async () => {
+  const checkUserRole = async () => {
     try {
+      console.log("Checking user role...");
       const { data, error } = await supabase
         .from('consultants')
         .select('role')
         .eq('user_id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.log("Error checking user role:", error);
+        throw error;
+      }
 
+      console.log("User role data:", data);
       setIsAdmin(data.role === 'admin');
+      setUserRole(data.role);
     } catch (error) {
-      console.error('Error checking admin status:', error);
-      setError('Error al verificar el estado de administrador');
+      console.error('Error checking user role:', error);
+      setError('Error al verificar el rol del usuario');
     }
   };
 
@@ -41,20 +50,25 @@ const ProjectManager = ({ user }) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Primero, obtén el ID del consultor actual
+      console.log("Fetching projects...");
       const { data: consultantData, error: consultantError } = await supabase
         .from('consultants')
         .select('id')
         .eq('user_id', user.id)
         .single();
   
-      if (consultantError && consultantError.code !== 'PGRST116') {
-        throw consultantError;
+      if (consultantError) {
+        console.log("Error fetching consultant data:", consultantError);
+        if (consultantError.code !== 'PGRST116') {
+          throw consultantError;
+        } else {
+          console.log("User is not a consultant");
+        }
       }
   
       let projectsData;
       if (consultantData) {
-        // Si el usuario es un consultor, obtén sus proyectos asignados
+        console.log("Fetching projects for consultant");
         const { data, error } = await supabase
           .from('project_consultants')
           .select(`
@@ -70,7 +84,7 @@ const ProjectManager = ({ user }) => {
         if (error) throw error;
         projectsData = data.map(item => item.projects).filter(Boolean);
       } else {
-        // Si el usuario no es un consultor, muestra todos los proyectos
+        console.log("Fetching all projects");
         const { data, error } = await supabase
           .from('projects')
           .select('*');
@@ -79,6 +93,7 @@ const ProjectManager = ({ user }) => {
         projectsData = data;
       }
   
+      console.log("Projects data:", projectsData);
       setProjects(projectsData);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -146,6 +161,7 @@ const ProjectManager = ({ user }) => {
           <button type="submit">Crear Proyecto</button>
         </form>
       )}
+      {/* <p>Role del usuario: {userRole || 'No definido'}</p> */}
     </div>
   );
 };

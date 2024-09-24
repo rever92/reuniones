@@ -10,53 +10,91 @@ Asignar la disponibilidad por día y franja de media hora que tiene cada uno
 Con todo esto, la aplicación debería mostrarme cuáles son las opciones en la que todas las personas que tienen que participar en una reunión están disponibles
 
 
--- Tabla projects (sin cambios)
-CREATE TABLE projects (
-  id BIGSERIAL PRIMARY KEY,
-  name TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  created_by UUID REFERENCES auth.users(id)
-);
 
--- Tabla consultants (actualizada)
-CREATE TABLE consultants (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id),
-  name TEXT,
-  email TEXT,
-  role TEXT -- Nuevo campo para almacenar el rol del consultor
-);
 
--- Tabla project_consultants (sin cambios)
-CREATE TABLE project_consultants (
-  id BIGSERIAL PRIMARY KEY,
-  project_id BIGINT REFERENCES projects(id),
-  consultant_id BIGINT REFERENCES consultants(id),
-  role TEXT
-);
 
--- Tabla meetings (sin cambios)
-CREATE TABLE meetings (
-  id BIGSERIAL PRIMARY KEY,
-  project_id BIGINT REFERENCES projects(id),
-  name TEXT,
-  duration INTEGER
-);
+Con todos los cambios y mejoras que hemos aplicado, haz una descripción actualizada de la aplicación y su funcionalidad y arquitectura.
+Antes de que empezaramos era esta:
 
--- Tabla meeting_participants (sin cambios)
-CREATE TABLE meeting_participants (
-  id BIGSERIAL PRIMARY KEY,
-  meeting_id BIGINT REFERENCES meetings(id),
-  consultant_id BIGINT REFERENCES consultants(id)
-);
 
--- Tabla availabilities (sin cambios)
-CREATE TABLE availabilities (
-  id BIGSERIAL PRIMARY KEY,
-  consultant_id BIGINT REFERENCES consultants(id),
-  project_id BIGINT REFERENCES projects(id),
-  date DATE,
-  time TIME,
-  is_available BOOLEAN
-);
+Estructura General:
+La aplicación se compone de varios componentes principales: App, Auth, ProjectManager, ProjectPage, ConsultoresTab, ReunionesTab, DisponibilidadTab, y ConsultantManager.
+Flujo de Autenticación:
 
+El componente App verifica si hay una sesión de usuario activa al iniciar.
+Si no hay sesión, se muestra el componente Auth para inicio de sesión o registro.
+Una vez autenticado, se guarda la sesión del usuario y se muestra la interfaz principal.
+
+
+Gestión de Proyectos (ProjectManager):
+
+Después de la autenticación, se carga el componente ProjectManager.
+Obtiene y muestra los proyectos del usuario autenticado desde Supabase.
+Permite ver proyectos existentes, crear nuevos proyectos y seleccionar un proyecto para trabajar.
+
+
+Página de Proyecto (ProjectPage):
+
+Se muestra cuando se selecciona un proyecto específico.
+Contiene tres pestañas principales: Consultores, Reuniones y Disponibilidad.
+Maneja el estado del proyecto seleccionado y el rol del usuario en ese proyecto.
+
+
+Gestión de Consultores (ConsultoresTab):
+
+Muestra los consultores asignados al proyecto actual.
+Permite buscar y asignar nuevos consultores al proyecto.
+Incluye la funcionalidad para crear nuevos consultores (a través de ConsultantManager).
+
+
+Gestión de Reuniones (ReunionesTab):
+
+Permite crear, editar y eliminar reuniones dentro del proyecto.
+Gestiona la asignación de consultores a las reuniones.
+Muestra una lista de reuniones con sus detalles y participantes.
+
+
+Gestión de Disponibilidad (DisponibilidadTab):
+
+Muestra y permite editar la disponibilidad de los consultores en un calendario semanal.
+Incluye filtros para seleccionar consultores y reuniones específicas.
+Calcula y muestra los horarios compatibles para todas las reuniones del proyecto.
+
+
+Interacción con Supabase:
+
+La aplicación utiliza Supabase para autenticación y como base de datos.
+Las operaciones CRUD se realizan a través de llamadas a la API de Supabase.
+Se han implementado políticas de seguridad en Supabase para controlar el acceso a los datos.
+
+
+Manejo de Estado:
+
+El estado global (sesión de usuario) se maneja en el componente App.
+Cada componente principal (ProjectManager, ProjectPage, etc.) maneja su propio estado local.
+Se utiliza React hooks (useState, useEffect, useMemo) para manejar el estado y los efectos secundarios.
+
+
+Roles y Permisos:
+
+Se ha implementado una lógica de roles más detallada (admin, director, consultor).
+Los permisos se aplican tanto en el frontend como en las políticas de seguridad de Supabase.
+Diferentes acciones y vistas están disponibles según el rol del usuario en cada proyecto.
+
+
+Renderizado Condicional y UI:
+
+Se utiliza renderizado condicional extensivamente para mostrar diferentes interfaces según el estado y los permisos.
+Se han implementado estilos CSS modulares para cada componente principal, mejorando la estética y la usabilidad.
+
+
+Optimización de Rendimiento:
+
+Se han implementado optimizaciones como useMemo para cálculos costosos (por ejemplo, en la búsqueda de horarios compatibles).
+La carga de datos se realiza de manera eficiente, obteniendo solo la información necesaria en cada vista.
+
+
+Manejo de Errores:
+
+Se ha mejorado el manejo de errores en toda la aplicación, mostrando mensajes de error apropiados al usuario.
+Se implementó logging de errores para facilitar la depuración.

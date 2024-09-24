@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import '../styles/DisponibilidadTab.css';
+import AvailabilityTable from './AvailabilityTable';
+import { Box, Typography } from '@mui/material';
 
 const DisponibilidadTab = ({ project, userRole, consultant }) => {
   const [disponibilidad, setDisponibilidad] = useState({});
@@ -95,8 +98,10 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
         }
         disponibilidadFormateada[item.consultant_id][item.date][item.time] = item.is_available;
       });
+
+      console.log('Disponibilidad formateada:', JSON.stringify(disponibilidadFormateada, null, 2));
+
       setDisponibilidad(disponibilidadFormateada);
-      console.log('Disponibilidad formateada:', disponibilidadFormateada);
     } catch (error) {
       console.error('Error fetching disponibilidad:', error);
     }
@@ -108,9 +113,8 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
       return;
     }
 
-    const fechaStr = fecha.toISOString().split('T')[0];
-    const horaStr = formatearHora(hora);
-    const isAvailable = !estaDisponible(consultantId, fechaStr, horaStr);
+    const { fechaFormateada, horaFormateada } = formatearFechaHora(fecha.toISOString(), formatearHora(hora));
+    const isAvailable = !estaDisponible(consultantId, fechaFormateada, horaFormateada.slice(0, 5));
 
     try {
       const { error } = await supabase
@@ -119,36 +123,52 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
           {
             consultant_id: consultantId,
             project_id: project.id,
-            date: fechaStr,
-            time: horaStr,
+            date: fechaFormateada,
+            time: horaFormateada,
             is_available: isAvailable
           }
         ]);
 
       if (error) throw error;
 
-      setDisponibilidad(prev => {
-        const newDisponibilidad = {
-          ...prev,
-          [consultantId]: {
-            ...(prev[consultantId] || {}),
-            [fechaStr]: {
-              ...(prev[consultantId]?.[fechaStr] || {}),
-              [horaStr]: isAvailable
-            }
+      setDisponibilidad(prev => ({
+        ...prev,
+        [consultantId]: {
+          ...(prev[consultantId] || {}),
+          [fechaFormateada]: {
+            ...(prev[consultantId]?.[fechaFormateada] || {}),
+            [horaFormateada]: isAvailable
           }
-        };
-        console.log('Disponibilidad actualizada:', newDisponibilidad);
-        return newDisponibilidad;
-      });
+        }
+      }));
+
+      console.log(`Disponibilidad actualizada: consultantId=${consultantId}, fecha=${fechaFormateada}, hora=${horaFormateada}, isAvailable=${isAvailable}`);
     } catch (error) {
       console.error('Error updating availability:', error);
     }
   };
 
+  const formatearFechaHora = (fecha, hora) => {
+    const fechaFormateada = fecha.split('T')[0]; // Extraer solo la parte de la fecha
+    const horaFormateada = `${hora.padStart(5, '0')}:00`; // Asegurar que tenga 5 caracteres y agregar :00
+    return { fechaFormateada, horaFormateada };
+  };
+
   const estaDisponible = useCallback((consultantId, fecha, hora) => {
-    const disponible = !!disponibilidad[consultantId]?.[fecha]?.[hora];
-    console.log(`Verificando disponibilidad: consultantId=${consultantId}, fecha=${fecha}, hora=${hora}, disponible=${disponible}`);
+    const { fechaFormateada, horaFormateada } = formatearFechaHora(fecha, hora);
+    const disponibleConsultant = disponibilidad[consultantId];
+    const disponibleFecha = disponibleConsultant?.[fechaFormateada];
+    const disponible = !!disponibleFecha?.[horaFormateada];
+
+    console.log(`Verificando disponibilidad:
+      consultantId=${consultantId}, 
+      fecha=${fechaFormateada}, 
+      hora=${horaFormateada}, 
+      disponible=${disponible},
+      disponibilidadConsultant=${JSON.stringify(disponibleConsultant)},
+      disponibilidadFecha=${JSON.stringify(disponibleFecha)}
+    `);
+
     return disponible;
   }, [disponibilidad]);
 
@@ -177,6 +197,8 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
     return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
   };
 
+
+
   const obtenerIniciales = (nombre) => {
     return nombre.split(' ').map(palabra => palabra[0]).join('');
   };
@@ -184,10 +206,7 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
   const encontrarHorariosCompatibles = useMemo(() => {
     const horariosDisponibles = {};
 
-    selectedReuniones.forEach(reunionId => {
-      const reunion = reuniones.find(r => r.id === reunionId);
-      if (!reunion) return;
-
+    reuniones.forEach(reunion => {
       const participantes = reunion.meeting_participants.map(mp => mp.consultant_id);
       const bloquesDisponibles = [];
 
@@ -224,7 +243,7 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
     });
 
     return horariosDisponibles;
-  }, [selectedReuniones, reuniones, disponibilidad, semanaActual, estaDisponible]);
+  }, [reuniones, disponibilidad, semanaActual, estaDisponible]);
 
   const handleReunionSelect = (reunionId) => {
     setSelectedReuniones(prev => {
@@ -269,17 +288,17 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
   }
 
   return (
-    <div>
+    <div className="card disponibilidad-container">
       <h2>Disponibilidad</h2>
       {userRole === 'director' && (
-        <div>
+        <div className="filtros">
           <h3>Filtros</h3>
-          <div>
+          <div className="form-group">
             <h4>Consultores</h4>
-            <button onClick={handleSelectAllConsultants}>Seleccionar todos</button>
-            <button onClick={handleDeselectAllConsultants}>Deseleccionar todos</button>
+            <button onClick={handleSelectAllConsultants} className="btn btn-secondary">Seleccionar todos</button>
+            <button onClick={handleDeselectAllConsultants} className="btn btn-secondary">Deseleccionar todos</button>
             {consultants.map(c => (
-              <label key={c.id}>
+              <label key={c.id} className="checkbox-label">
                 <input
                   type="checkbox"
                   checked={selectedConsultants.includes(c.id)}
@@ -295,10 +314,10 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
               </label>
             ))}
           </div>
-          <div>
+          <div className="form-group">
             <h4>Reuniones</h4>
             {reuniones.map(r => (
-              <label key={r.id}>
+              <label key={r.id} className="checkbox-label">
                 <input
                   type="checkbox"
                   checked={selectedReuniones.includes(r.id)}
@@ -312,11 +331,18 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
       )}
       <div className="calendario">
         <div className="navegacion-semana">
-          <button onClick={() => cambiarSemana(-1)}>Semana Anterior</button>
+          <button onClick={() => cambiarSemana(-1)} className="btn btn-primary">Semana Anterior</button>
           <span>{semanaActual.toDateString()}</span>
-          <button onClick={() => cambiarSemana(1)}>Semana Siguiente</button>
+          <button onClick={() => cambiarSemana(1)} className="btn btn-primary">Semana Siguiente</button>
         </div>
-        <table>
+        <AvailabilityTable
+          week={obtenerSemana(semanaActual)}
+          consultants={consultants}
+          disponibilidad={disponibilidad}
+          actualizarDisponibilidad={actualizarDisponibilidad}
+          selectedConsultants={selectedConsultants}
+        />
+        {/* <table>
           <thead>
             <tr>
               <th>Hora</th>
@@ -339,7 +365,6 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
                         const fechaStr = dia.toISOString().split('T')[0];
                         const horaStr = formatearHora(hora / 2);
                         const isDisponible = estaDisponible(consultantId, fechaStr, horaStr);
-                        console.log(`Renderizando botón: consultantId=${consultantId}, fecha=${fechaStr}, hora=${horaStr}, isDisponible=${isDisponible}`);
                         return (
                           <button
                             key={consultantId}
@@ -356,16 +381,16 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table> */}
       </div>
       {userRole === 'director' && (
-        <div>
+        <div className="horarios-compatibles">
           <h3>Horarios Compatibles para Reuniones</h3>
-          {Object.entries(encontrarHorariosCompatibles).map(([reunionId, horarios]) => {
-            const reunion = reuniones.find(r => r.id === parseInt(reunionId));
+          {reuniones.map(reunion => {
+            const horarios = encontrarHorariosCompatibles[reunion.id] || [];
             return (
-              <div key={reunionId}>
-                <h4>{reunion?.name} ({reunion?.duration} minutos)</h4>
+              <div key={reunion.id} className="reunion-horarios">
+                <h4>{reunion.name} ({reunion.duration} minutos)</h4>
                 {horarios.length > 0 ? (
                   <ul>
                     {horarios.map((horario, index) => (

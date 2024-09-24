@@ -6,6 +6,7 @@ import ReunionesTab from './ReunionesTab';
 import DisponibilidadTab from './DisponibilidadTab';
 import Popup from './Popup';
 import ConsultantManager from './ConsultantManager';
+import TabNavigation from './TabNavigation';
 
 const ProjectPage = ({ user }) => {
   const { projectId } = useParams();
@@ -111,43 +112,55 @@ const ProjectPage = ({ user }) => {
     // Aquí puedes agregar lógica adicional si es necesario
   };
 
+
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case 'consultores':
+        return (
+          <ConsultoresTab
+            project={project}
+            userRole={userRole}
+            consultant={consultant}
+            onNewConsultant={() => setIsPopupOpen(true)}
+          />
+        );
+      case 'reuniones':
+        return (
+          <ReunionesTab
+            project={project}
+            userRole={userRole}
+            consultant={consultant}
+          />
+        );
+      case 'disponibilidad':
+        return (
+          <DisponibilidadTab
+            project={project}
+            userRole={userRole}
+            consultant={consultant}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   if (isLoading) return <p>Cargando proyecto...</p>;
-  if (error) return <p style={{ color: 'red' }}>{error}</p>;
+  if (error) return <p className="error-message">{error}</p>;
   if (!project) return <p>No se encontró el proyecto.</p>;
 
   return (
     <div className="project-page">
-      <h1>Proyecto: {project.name}</h1>
-      <p>Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
-
-      <div className="tabs">
-        <button onClick={() => setActiveTab('consultores')}>Consultores</button>
-        <button onClick={() => setActiveTab('reuniones')}>Reuniones</button>
-        <button onClick={() => setActiveTab('disponibilidad')}>Disponibilidad</button>
+      <h1>{project.name}</h1>
+      <p className="project-date">Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
+      <TabNavigation 
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        userRole={userRole}
+      />
+      <div className="tab-content">
+        {renderActiveTab()}
       </div>
-
-      {activeTab === 'consultores' && (
-        <ConsultoresTab
-          project={project}
-          userRole={userRole}
-          consultant={consultant}
-          onNewConsultant={() => setIsPopupOpen(true)}
-        />
-      )}
-      {activeTab === 'reuniones' && (
-        <ReunionesTab
-          project={project}
-          userRole={userRole}
-          consultant={consultant}
-        />
-      )}
-      {activeTab === 'disponibilidad' && (
-        <DisponibilidadTab
-          project={project}
-          userRole={userRole}
-          consultant={consultant}
-        />
-      )}
 
       <Popup isOpen={isPopupOpen} onClose={() => setIsPopupOpen(false)}>
         <ConsultantManager
@@ -159,4 +172,5 @@ const ProjectPage = ({ user }) => {
     </div>
   );
 };
+
 export default ProjectPage;

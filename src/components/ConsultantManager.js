@@ -51,39 +51,29 @@ const ConsultantManager = ({ user, onClose, onConsultantCreated }) => {
   const createConsultant = async (e) => {
     e.preventDefault();
     if (!newConsultantName.trim() || !newConsultantEmail.trim()) return;
-
+  
     setError(null);
     try {
       // Crear un nuevo usuario en Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newConsultantEmail,
         password: Math.random().toString(36).slice(-8), // Contraseña temporal
+        options: {
+          data: {
+            full_name: newConsultantName
+          },
+          emailRedirectTo: `${window.location.origin}/setup-password`
+        }
       });
-
+  
       if (authError) {
         if (authError.status === 429) {
           throw new Error('Se han realizado demasiadas solicitudes. Por favor, intenta más tarde.');
         }
         throw authError;
       }
-
-      // Crear el consultor en la tabla de consultants
-      const { data, error } = await supabase
-        .from('consultants')
-        .insert([
-          { 
-            user_id: authData.user.id,
-            name: newConsultantName, 
-            email: newConsultantEmail,
-            role: 'consultant'
-          }
-        ])
-        .select();
-
-      if (error) throw error;
-
+  
       console.log(`Correo de invitación enviado a ${newConsultantEmail}`);
-      onConsultantCreated(data[0]);
       fetchConsultants();  // Actualizar la lista de consultores
       setNewConsultantName('');
       setNewConsultantEmail('');

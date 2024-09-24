@@ -1,0 +1,63 @@
+.disponibilidad-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .filtros {
+    margin-bottom: 20px;
+    background-color: #f5f5f5;
+    padding: 15px;
+    border-radius: 8px;
+  }
+  
+  .calendario {
+    overflow-x: auto;
+  }
+  
+  .calendario table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .calendario th, .calendario td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+  }
+  
+  .calendario th {
+    background-color: #f2f2f2;
+  }
+  
+  .disponibilidad-boton {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    margin: 2px;
+  }
+  
+  .disponible {
+    background-color: #4CAF50;
+  }
+  
+  .no-disponible {
+    background-color: #f44336;
+  }
+  
+  .navegacion-semana {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+  }
+  
+  .navegacion-semana button {
+    padding: 8px 12px;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
