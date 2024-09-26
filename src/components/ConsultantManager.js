@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
+
 const ConsultantManager = ({ user, onClose, onConsultantCreated }) => {
   const [newConsultantName, setNewConsultantName] = useState('');
   const [newConsultantEmail, setNewConsultantEmail] = useState('');

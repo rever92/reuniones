@@ -177,22 +177,93 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
           consultants={consultants}
           onSave={handleSaveReunion}
           onCancel={() => setIsPopupOpen(false)}
+          project={project}
         />
       </Popup>
     </div>
   );
 };
 
-const EditReunionForm = ({ reunion, consultants, onSave, onCancel }) => {
+const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) => {
   const [name, setName] = useState(reunion.name);
   const [duration, setDuration] = useState(reunion.duration);
   const [participants, setParticipants] = useState(
     reunion.meeting_participants?.map(mp => mp.consultant_id) || []
   );
+  const [selectedDateTime, setSelectedDateTime] = useState(reunion.scheduled_at || null);
+  const [availableSlots, setAvailableSlots] = useState([]);
+
+  useEffect(() => {
+    fetchAvailableSlots();
+  }, [participants, duration]);
+
+  const fetchAvailableSlots = async () => {
+    if (participants.length === 0 || !duration) return;
+
+    try {
+      const startOfWeek = new Date();
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 4);
+
+      const { data: availabilities, error } = await supabase
+        .from('availabilities')
+        .select('*')
+        .in('consultant_id', participants)
+        .eq('project_id', project.id)
+        .gte('date', startOfWeek.toISOString().split('T')[0])
+        .lte('date', endOfWeek.toISOString().split('T')[0]);
+
+      if (error) throw error;
+
+      const availabilityMap = {};
+      availabilities.forEach(av => {
+        if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
+        if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
+        availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
+      });
+
+      const slots = [];
+      for (let d = new Date(startOfWeek); d <= endOfWeek; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        for (let hour = 8; hour < 18; hour++) {
+          for (let minute = 0; minute < 60; minute += 30) {
+            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+            let isAvailable = true;
+            for (let i = 0; i < duration / 30; i++) {
+              const checkTime = new Date(d.getTime() + (hour * 60 + minute + i * 30) * 60000);
+              const checkTimeStr = `${checkTime.getHours().toString().padStart(2, '0')}:${checkTime.getMinutes().toString().padStart(2, '0')}`;
+              if (checkTime.getHours() >= 18) {
+                isAvailable = false;
+                break;
+              }
+              for (const participantId of participants) {
+                if (!availabilityMap[dateStr]?.[participantId]?.[checkTimeStr]) {
+                  isAvailable = false;
+                  break;
+                }
+              }
+              if (!isAvailable) break;
+            }
+            if (isAvailable) {
+              slots.push({
+                datetime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).toISOString()
+              });
+            }
+          }
+        }
+      }
+
+      setAvailableSlots(slots);
+      console.log('Available slots:', slots);
+    } catch (error) {
+      console.error('Error fetching available slots:', error);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ ...reunion, name, duration, participants });
+    onSave({ ...reunion, name, duration, participants, scheduled_at: selectedDateTime });
   };
 
   const toggleParticipant = (consultantId) => {
@@ -235,6 +306,19 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel }) => {
           </label>
         ))}
       </div>
+      <h4>Horarios disponibles:</h4>
+      <select
+        value={selectedDateTime}
+        onChange={(e) => setSelectedDateTime(e.target.value)}
+        className="form-control"
+      >
+        <option value="">Seleccione un horario</option>
+        {availableSlots.map((slot, index) => (
+          <option key={index} value={slot.datetime}>
+            {new Date(slot.datetime).toLocaleString()}
+          </option>
+        ))}
+      </select>
       <div className="form-actions">
         <button type="submit" className="btn btn-primary">Guardar</button>
         <button type="button" onClick={onCancel} className="btn btn-secondary">Cancelar</button>

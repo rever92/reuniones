@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
 const UserManager = ({ project, onClose, onUserCreated }) => {
@@ -8,13 +8,10 @@ const UserManager = ({ project, onClose, onUserCreated }) => {
   const [newUserArea, setNewUserArea] = useState('');
   const [newUserRole, setNewUserRole] = useState('consultant');
   const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [emailError, setEmailError] = useState(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [project.id]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('project_consultants')
@@ -28,57 +25,135 @@ const UserManager = ({ project, onClose, onUserCreated }) => {
     } finally {
       setIsLoading(false);
     }
+  }, [project.id]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const checkEmailExists = useCallback(async (email) => {
+    const { data, error } = await supabase
+      .from('consultants')
+      .select('email')
+      .eq('email', email)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking email:', error);
+      return false;
+    }
+
+    return !!data;
+  }, []);
+
+  const handleEmailChange = async (e) => {
+    const email = e.target.value;
+    setNewUserEmail(email);
+    setEmailError(null);
+
+    if (email) {
+      const exists = await checkEmailExists(email);
+      if (exists) {
+        setEmailError('Este email ya está registrado');
+      }
+    }
   };
 
   const createUser = async (e) => {
     e.preventDefault();
     if (!newUserName.trim() || !newUserEmail.trim() || !newUserArea.trim()) return;
-  
+    if (emailError) return;
+
     setError(null);
+    setIsLoading(true);
     try {
+      // Verificar una vez más si el email existe
+      const exists = await checkEmailExists(newUserEmail);
+      if (exists) {
+        setEmailError('Este email ya está registrado');
+        setIsLoading(false);
+        return;
+      }
+
+      // 1. Crear el usuario en Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUserEmail,
         password: Math.random().toString(36).slice(-8),
         options: {
           data: {
-            full_name: newUserName
-          },
-          emailRedirectTo: `${window.location.origin}/setup-password`
+            full_name: newUserName,
+            area: newUserArea,
+            role: newUserRole
+          }
         }
       });
-  
+
       if (authError) throw authError;
-  
-      const { error: insertError } = await supabase
+
+      console.log('Auth Data:', authData);
+
+      // 2. Esperar un momento para que el trigger cree el consultor
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 3. Obtener el consultor recién creado
+      let { data: consultantData, error: consultantError } = await supabase
         .from('consultants')
-        .insert([
-          { 
-            user_id: authData.user.id, 
-            name: newUserName, 
-            email: newUserEmail, 
-            role: newUserRole,
-            area: newUserArea
-          }
-        ]);
+        .select('*')
+        .eq('user_id', authData.user.id)
+        .single();
 
-      if (insertError) throw insertError;
+      if (consultantError) {
+        console.error('Error fetching consultant:', consultantError);
+        throw consultantError;
+      }
 
-      await supabase
+      if (!consultantData) {
+        console.error('Consultant not found after creation');
+        throw new Error('Consultant not found after creation');
+      }
+
+      // 4. Actualizar el rol del consultor si es necesario
+      if (consultantData.role !== newUserRole) {
+        const { data: updatedConsultantData, error: updateError } = await supabase
+          .from('consultants')
+          .update({ role: newUserRole })
+          .eq('id', consultantData.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Error updating consultant role:', updateError);
+          throw updateError;
+        }
+        consultantData = updatedConsultantData;
+      }
+
+      // 5. Asignar el consultor al proyecto
+      const { error: assignError } = await supabase
         .from('project_consultants')
-        .insert([
-          { project_id: project.id, consultant_id: authData.user.id, role: newUserRole }
-        ]);
-  
-      console.log(`Correo de invitación enviado a ${newUserEmail}`);
-      fetchUsers();
+        .insert({
+          project_id: project.id,
+          consultant_id: consultantData.id,
+          role: newUserRole
+        });
+
+      if (assignError) {
+        console.error('Error assigning consultant to project:', assignError);
+        throw assignError;
+      }
+
+      console.log(`Usuario creado y asignado al proyecto: ${newUserEmail}`);
       setNewUserName('');
       setNewUserEmail('');
       setNewUserArea('');
       setNewUserRole('consultant');
       if (onUserCreated) onUserCreated();
+      onClose();
     } catch (error) {
       console.error('Error creating user:', error);
       setError(error.message || 'No se pudo crear el usuario. Por favor, intenta de nuevo.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -102,52 +177,66 @@ const UserManager = ({ project, onClose, onUserCreated }) => {
   }
 
   return (
-    <div className="modal">
-      <div className="modal-content">
-        <h2>Gestión de Usuarios del Proyecto</h2>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <form onSubmit={createUser}>
-          <input
-            type="text"
-            value={newUserName}
-            onChange={(e) => setNewUserName(e.target.value)}
-            placeholder="Nombre del usuario"
-            required
-          />
-          <input
-            type="email"
-            value={newUserEmail}
-            onChange={(e) => setNewUserEmail(e.target.value)}
-            placeholder="Email del usuario"
-            required
-          />
-          <input
-            type="text"
-            value={newUserArea}
-            onChange={(e) => setNewUserArea(e.target.value)}
-            placeholder="Área del usuario"
-            required
-          />
-          <select
-            value={newUserRole}
-            onChange={(e) => setNewUserRole(e.target.value)}
-            required
-          >
-            <option value="consultant">Consultor</option>
-            <option value="client">Cliente</option>
-          </select>
-          <button type="submit">Crear Usuario</button>
+    <div className="user-manager-modal">
+      <div className="user-manager-content">
+        <h2 className="user-manager-title">Agregar Nuevo Usuario al Proyecto</h2>
+        {error && <p className="error-message">{error}</p>}
+        <form onSubmit={createUser} className="user-form">
+          <div className="form-group">
+            <label htmlFor="userName">Nombre del usuario</label>
+            <input
+              id="userName"
+              type="text"
+              value={newUserName}
+              onChange={(e) => setNewUserName(e.target.value)}
+              placeholder="Nombre del usuario"
+              required
+              className="form-control"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="userEmail">Email del usuario</label>
+            <input
+              id="userEmail"
+              type="email"
+              value={newUserEmail}
+              onChange={handleEmailChange}
+              placeholder="Email del usuario"
+              required
+              className="form-control"
+            />
+            {emailError && <p className="error-message">{emailError}</p>}
+          </div>
+          <div className="form-group">
+            <label htmlFor="userArea">Área del usuario</label>
+            <input
+              id="userArea"
+              type="text"
+              value={newUserArea}
+              onChange={(e) => setNewUserArea(e.target.value)}
+              placeholder="Área del usuario"
+              required
+              className="form-control"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="userRole">Rol del usuario</label>
+            <select
+              id="userRole"
+              value={newUserRole}
+              onChange={(e) => setNewUserRole(e.target.value)}
+              required
+              className="form-control"
+            >
+              <option value="consultant">Consultor</option>
+              <option value="client">Cliente</option>
+            </select>
+          </div>
+          <button type="submit" disabled={isLoading || !!emailError} className="btn btn-primary">
+            {isLoading ? 'Creando...' : 'Crear Usuario'}
+          </button>
         </form>
-        <h3>Lista de Usuarios del Proyecto</h3>
-        <ul>
-          {users.map(user => (
-            <li key={user.id}>
-              {user.name} ({user.email}) - {user.area} - {user.role}
-              <button onClick={() => deleteUser(user.id)}>Eliminar del Proyecto</button>
-            </li>
-          ))}
-        </ul>
-        <button onClick={onClose}>Cerrar</button>
+        <button onClick={onClose} className="btn btn-secondary">Cancelar</button>
       </div>
     </div>
   );

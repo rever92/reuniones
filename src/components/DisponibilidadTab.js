@@ -33,25 +33,26 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
     try {
       const { data, error } = await supabase
         .from('project_consultants')
-        .select('consultant_id, consultants(id, name)')
+        .select('consultant_id, consultants(id, name, role)')
         .eq('project_id', project.id);
-
+  
       if (error) throw error;
-
+  
       const consultantsData = data.map(item => ({
         id: item.consultants.id,
-        name: item.consultants.name
+        name: item.consultants.name,
+        role: item.consultants.role
       }));
-
+  
       setConsultants(consultantsData);
       if (userRole !== 'director') {
         setSelectedConsultants([consultant.id]);
       } else {
         setSelectedConsultants(consultantsData.map(c => c.id));
       }
-      console.log('Consultants cargados:', consultantsData);
+      console.log('Consultants y clientes cargados:', consultantsData);
     } catch (error) {
-      console.error('Error fetching consultants:', error);
+      console.error('Error fetching consultants and clients:', error);
     }
   };
 

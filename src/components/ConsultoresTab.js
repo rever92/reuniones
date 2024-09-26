@@ -1,31 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import '../styles/ConsultoresTab.css';
 
-const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant }) => {
-  const [consultants, setConsultants] = useState([]);
+const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant, refreshTrigger }) => {
+  const [users, setUsers] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('consultores');
+  const [assignedConsultants, setAssignedConsultants] = useState([]);
 
   useEffect(() => {
-    fetchConsultants();
-  }, [project.id]);
+    fetchUsers();
+  }, [project.id, refreshTrigger]);
 
-  const fetchConsultants = async () => {
+  const fetchUsers = useCallback(async () => {
     const { data, error } = await supabase
       .from('project_consultants')
       .select(`
         consultant_id,
-        consultants (id, name, email)
+        role,
+        consultants (id, name, email, role, area)
       `)
       .eq('project_id', project.id);
 
     if (error) {
-      console.error('Error fetching consultants:', error);
+      console.error('Error fetching users:', error);
     } else {
-      setConsultants(data.map(item => item.consultants));
+      setUsers(data.map(item => ({ ...item.consultants, projectRole: item.role })));
+      setAssignedConsultants(data.map(item => item.consultant_id));
     }
-  };
+  }, [project.id]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers, refreshTrigger]);
 
   const searchConsultants = async () => {
     const { data, error } = await supabase
@@ -42,10 +50,6 @@ const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant }) => {
   };
 
   const assignConsultant = async (consultantId) => {
-    console.log('Attempting to assign consultant. User role:', userRole);
-    console.log('Project:', project);
-    console.log('Consultant:', consultant);
-
     if (userRole !== 'director' && consultant.role !== 'admin') {
       console.error('Solo los directores o administradores pueden asignar consultores');
       return;
@@ -60,25 +64,85 @@ const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant }) => {
       if (error) throw error;
 
       console.log('Consultant assigned successfully:', data);
-      fetchConsultants();
+      fetchUsers();
       setSearchResults([]);
     } catch (error) {
       console.error('Error assigning consultant:', error);
       console.error('Error details:', error.details, error.hint, error.message);
-      // Aquí puedes mostrar un mensaje de error al usuario
     }
   };
 
+  const removeUserFromProject = async (userId) => {
+    try {
+      const { error } = await supabase
+        .from('project_consultants')
+        .delete()
+        .eq('consultant_id', userId)
+        .eq('project_id', project.id);
+
+      if (error) throw error;
+      fetchUsers();
+    } catch (error) {
+      console.error('Error removing user from project:', error);
+    }
+  };
+
+
+  const renderUserTable = (userType) => (
+    <table className="users-table">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Área</th>
+          <th>Rol en el proyecto</th>
+          <th>Rol general</th>
+          {userRole === 'director' && <th>Acciones</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {users
+          .filter(user => user.role === userType)
+          .map(user => (
+            <tr key={user.id}>
+              <td>{user.name}</td>
+              <td>{user.email}</td>
+              <td>{user.area}</td>
+              <td>{user.projectRole}</td>
+              <td>{user.role}</td>
+              {userRole === 'director' && (
+                <td>
+                  <button onClick={() => removeUserFromProject(user.id)} className="btn btn-danger">
+                    Quitar del Proyecto
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <div className="card consultores-container">
-      <h2>Consultores del Proyecto</h2>
-      <ul className="consultores-list">
-        {consultants.map(c => (
-          <li key={c.id} className="consultor-item">
-            <span>{c.name} - {c.email}</span>
-          </li>
-        ))}
-      </ul>
+      <h2>Consultores y Clientes del Proyecto</h2>
+      <div className="tabs">
+        <button
+          className={activeTab === 'consultores' ? 'active' : ''}
+          onClick={() => setActiveTab('consultores')}
+        >
+          Consultores
+        </button>
+        <button
+          className={activeTab === 'clientes' ? 'active' : ''}
+          onClick={() => setActiveTab('clientes')}
+        >
+          Clientes
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'consultores' ? renderUserTable('consultant') : renderUserTable('client')}
+      </div>
       {userRole === 'director' && (
         <div className="search-bar">
           <input
@@ -89,22 +153,21 @@ const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant }) => {
             className="form-control"
           />
           <button onClick={searchConsultants} className="btn btn-primary">Buscar</button>
-          <button onClick={onNewConsultant} className="btn btn-secondary">Nuevo Consultor</button>
+          <button onClick={onNewConsultant} className="btn btn-secondary">Nuevo Usuario</button>
         </div>
       )}
-      {searchResults.length > 0 && userRole === 'director' && (
-        <div className="search-results">
-          <h3>Resultados de búsqueda:</h3>
-          <ul className="consultores-list">
-            {searchResults.map(c => (
-              <li key={c.id} className="consultor-item">
-                <span>{c.name} - {c.email}</span>
-                <button onClick={() => assignConsultant(c.id)} className="btn btn-primary">Asignar al proyecto</button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {searchResults.map(c => (
+        <li key={c.id} className="consultor-item">
+          <span>{c.name} - {c.email}</span>
+          <button
+            onClick={() => assignConsultant(c.id)}
+            className={`btn ${assignedConsultants.includes(c.id) ? 'btn-secondary' : 'btn-primary'}`}
+            disabled={assignedConsultants.includes(c.id)}
+          >
+            {assignedConsultants.includes(c.id) ? 'Ya asignado' : 'Asignar al proyecto'}
+          </button>
+        </li>
+      ))}
     </div>
   );
 };

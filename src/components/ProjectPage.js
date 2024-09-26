@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import ConsultoresTab from './ConsultoresTab';
@@ -6,6 +6,7 @@ import ReunionesTab from './ReunionesTab';
 import DisponibilidadTab from './DisponibilidadTab';
 import Popup from './Popup';
 import ConsultantManager from './ConsultantManager';
+import UserManager from './UserManager';
 import TabNavigation from './TabNavigation';
 
 const ProjectPage = ({ user }) => {
@@ -17,6 +18,8 @@ const ProjectPage = ({ user }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [refreshConsultores, setRefreshConsultores] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -30,6 +33,7 @@ const ProjectPage = ({ user }) => {
       fetchUserRole();
     }
   }, [consultant, projectId]);
+
 
   const fetchProject = async () => {
     try {
@@ -81,7 +85,7 @@ const ProjectPage = ({ user }) => {
       setUserRole('No es consultor');
       return;
     }
-    
+
     try {
       const { data, error } = await supabase
         .from('project_consultants')
@@ -89,7 +93,7 @@ const ProjectPage = ({ user }) => {
         .eq('project_id', projectId)
         .eq('consultant_id', consultant.id)
         .single();
-  
+
       if (error) {
         if (error.code === 'PGRST116') {
           console.log('User has no role in this project');
@@ -107,10 +111,10 @@ const ProjectPage = ({ user }) => {
     }
   };
 
-  const handleConsultantCreated = (newConsultant) => {
+  const handleConsultantCreated = useCallback(() => {
     setIsPopupOpen(false);
-    // Aquí puedes agregar lógica adicional si es necesario
-  };
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
 
 
   const renderActiveTab = () => {
@@ -122,6 +126,7 @@ const ProjectPage = ({ user }) => {
             userRole={userRole}
             consultant={consultant}
             onNewConsultant={() => setIsPopupOpen(true)}
+            refreshTrigger={refreshTrigger}
           />
         );
       case 'reuniones':
@@ -153,7 +158,7 @@ const ProjectPage = ({ user }) => {
     <div className="project-page">
       <h1>{project.name}</h1>
       <p className="project-date">Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
-      <TabNavigation 
+      <TabNavigation
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         userRole={userRole}
@@ -163,10 +168,10 @@ const ProjectPage = ({ user }) => {
       </div>
 
       <Popup isOpen={isPopupOpen} onClose={() => setIsPopupOpen(false)}>
-        <ConsultantManager
-          user={user}
+        <UserManager
+          project={project}
           onClose={() => setIsPopupOpen(false)}
-          onConsultantCreated={handleConsultantCreated}
+          onUserCreated={handleConsultantCreated}
         />
       </Popup>
     </div>
