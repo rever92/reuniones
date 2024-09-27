@@ -492,3 +492,117 @@ h1, h2, h3, h4, h5, h6 {
   color: #dc3545;
   margin-bottom: 1rem;
 }
+
+
+/*  REUNIONTAB */
+.edit-reunion-form {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.edit-reunion-form .form-group {
+  margin-bottom: 20px;
+}
+
+.edit-reunion-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.edit-reunion-form .form-control {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.edit-reunion-form .participants-section {
+  margin-bottom: 20px;
+}
+
+.edit-reunion-form .participants-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.edit-reunion-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  font-weight: normal;
+}
+
+.edit-reunion-form .checkbox-label input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.edit-reunion-form .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.edit-reunion-form .btn {
+  padding: 8px 16px;
+}
+
+
+/* AVAILABILITY CALENDAR */
+.availability-calendar {
+  width: 100%;
+  border: 1px solid #ddd;
+  font-family: Arial, sans-serif;
+}
+
+.calendar-header {
+  display: flex;
+  background-color: #f0f0f0;
+}
+
+.calendar-day-header {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.calendar-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-row {
+  display: flex;
+  border-bottom: 1px solid #eee;
+}
+
+.time-label {
+  width: 50px;
+  text-align: right;
+  padding-right: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.calendar-slot {
+  flex: 1;
+  height: 20px;
+  border-right: 1px solid #eee;
+  cursor: pointer;
+}
+
+.calendar-slot.available {
+  background-color: #e6f7ff;
+}
+
+.calendar-slot.selected {
+  background-color: #1890ff;
+}
+
+.calendar-slot:hover {
+  background-color: #40a9ff;
+}
