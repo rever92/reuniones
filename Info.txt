@@ -98,3 +98,9 @@ Manejo de Errores:
 
 Se ha mejorado el manejo de errores en toda la aplicación, mostrando mensajes de error apropiados al usuario.
 Se implementó logging de errores para facilitar la depuración.
+
+
+
+
+¿Por qué desaparecen disponibilidades de reuniones que antes aparecían cuando fijo una reunión?
+Porque si le fijo una reunión a un consultor, este hueco ya no está disponible. 

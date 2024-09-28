@@ -552,11 +552,19 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 
-/* AVAILABILITY CALENDAR */
+/* AVAILABILITYCALENDAR */
 .availability-calendar {
   width: 100%;
   border: 1px solid #ddd;
   font-family: Arial, sans-serif;
+}
+
+.calendar-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: #f0f0f0;
 }
 
 .calendar-header {
@@ -573,36 +581,47 @@ h1, h2, h3, h4, h5, h6 {
 
 .calendar-body {
   display: flex;
-  flex-direction: column;
+  height: 660px;  /* 11 hours * 60px per hour */
 }
 
-.calendar-row {
-  display: flex;
-  border-bottom: 1px solid #eee;
-}
-
-.time-label {
+.calendar-time-column {
   width: 50px;
-  text-align: right;
-  padding-right: 10px;
   border-right: 1px solid #ddd;
 }
 
-.calendar-slot {
+.calendar-hour {
+  height: 60px;
+  border-top: 1px solid #ddd;
+  text-align: right;
+  padding-right: 5px;
+  font-size: 12px;
+}
+
+.calendar-day-column {
   flex: 1;
-  height: 20px;
-  border-right: 1px solid #eee;
-  cursor: pointer;
+  position: relative;
+  border-right: 1px solid #ddd;
 }
 
-.calendar-slot.available {
-  background-color: #e6f7ff;
+.calendar-day-column::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(to bottom, #ddd 1px, transparent 1px);
+  background-size: 100% 60px;
+  pointer-events: none;
 }
 
-.calendar-slot.selected {
-  background-color: #1890ff;
-}
-
-.calendar-slot:hover {
-  background-color: #40a9ff;
+/* Estilos para los slots de reunión */
+.calendar-day-column > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
 }

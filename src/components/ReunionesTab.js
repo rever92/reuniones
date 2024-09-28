@@ -1,7 +1,106 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import Popup from './Popup';
+import AvailabilityCalendar from './AvailabilityCalendar';
 
+const fetchAvailableSlots = async (reunion, participants, duration, project) => {
+  if (!participants || participants.length === 0 || !duration) {
+    return [];
+  }
+
+  try {
+    const startDate = new Date();
+    startDate.setUTCHours(0, 0, 0, 0);
+    const endDate = new Date(startDate);
+    endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
+
+    const { data: availabilities, error: availabilitiesError } = await supabase
+      .from('availabilities')
+      .select('*')
+      .in('consultant_id', participants)
+      .eq('project_id', project.id)
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', endDate.toISOString().split('T')[0]);
+
+    if (availabilitiesError) throw availabilitiesError;
+
+    const { data: existingMeetings, error: meetingsError } = await supabase
+      .from('meetings')
+      .select(`
+        id,
+        scheduled_at,
+        duration,
+        meeting_participants (consultant_id)
+      `)
+      .eq('project_id', project.id)
+      .neq('id', reunion.id)
+      .gte('scheduled_at', startDate.toISOString())
+      .lt('scheduled_at', endDate.toISOString())
+      .in('meeting_participants.consultant_id', participants);
+
+    if (meetingsError) throw meetingsError;
+
+    const availabilityMap = {};
+    availabilities.forEach(av => {
+      if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
+      if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
+      availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
+    });
+
+    const meetingsMap = {};
+    existingMeetings.forEach(meeting => {
+      const meetingStart = new Date(meeting.scheduled_at);
+      const meetingEnd = new Date(meetingStart.getTime() + meeting.duration * 60000);
+      meeting.meeting_participants.forEach(participant => {
+        if (!meetingsMap[participant.consultant_id]) {
+          meetingsMap[participant.consultant_id] = [];
+        }
+        meetingsMap[participant.consultant_id].push({ start: meetingStart, end: meetingEnd });
+      });
+    });
+
+    const slots = [];
+    for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      for (let hour = 8; hour < 18; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+          const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+          let isAvailable = true;
+          for (let i = 0; i < duration / 30; i++) {
+            const checkTime = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour, minute + i * 30));
+            const checkTimeStr = `${checkTime.getUTCHours().toString().padStart(2, '0')}:${checkTime.getUTCMinutes().toString().padStart(2, '0')}:00`;
+            if (checkTime.getUTCHours() >= 18) {
+              isAvailable = false;
+              break;
+            }
+            for (const participantId of participants) {
+              if (!availabilityMap[dateStr]?.[participantId]?.[checkTimeStr]) {
+                isAvailable = false;
+                break;
+              }
+              const participantMeetings = meetingsMap[participantId] || [];
+              if (participantMeetings.some(meeting => checkTime >= meeting.start && checkTime < meeting.end)) {
+                isAvailable = false;
+                break;
+              }
+            }
+            if (!isAvailable) break;
+          }
+          if (isAvailable) {
+            slots.push({
+              datetime: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour, minute)).toISOString()
+            });
+          }
+        }
+      }
+    }
+
+    return slots;
+  } catch (error) {
+    console.error('Error fetching available slots:', error);
+    return [];
+  }
+};
 
 const ReunionesTab = ({ project, userRole, consultant }) => {
   const [reuniones, setReuniones] = useState([]);
@@ -10,11 +109,21 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
   const [error, setError] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [currentReunion, setCurrentReunion] = useState(null);
+  const [availableSlots, setAvailableSlots] = useState({});
+  const [selectedReuniones, setSelectedReuniones] = useState([]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     fetchReuniones();
     fetchConsultants();
   }, [project.id, consultant?.id, userRole]);
+
+  useEffect(() => {
+    if (reuniones.length > 0) {
+      fetchAvailableSlotsForAllReuniones();
+    }
+  }, [reuniones, project]);
 
   const fetchReuniones = async () => {
     setIsLoading(true);
@@ -71,6 +180,193 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
     }
   };
 
+  const fetchAllAvailableSlots = async (reunion, participants, duration, project) => {
+    if (!participants || participants.length === 0 || !duration) {
+      return [];
+    }
+  
+    try {
+      const startDate = new Date();
+      startDate.setUTCHours(0, 0, 0, 0);
+      const endDate = new Date(startDate);
+      endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
+  
+      const { data: availabilities, error: availabilitiesError } = await supabase
+        .from('availabilities')
+        .select('*')
+        .in('consultant_id', participants)
+        .eq('project_id', project.id)
+        .gte('date', startDate.toISOString().split('T')[0])
+        .lte('date', endDate.toISOString().split('T')[0]);
+  
+      if (availabilitiesError) throw availabilitiesError;
+  
+      const availabilityMap = {};
+      availabilities.forEach(av => {
+        if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
+        if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
+        availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
+      });
+  
+      const slots = [];
+      for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        for (let hour = 8; hour < 18; hour++) {
+          for (let minute = 0; minute < 60; minute += 30) {
+            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+            let isAvailable = true;
+            for (let i = 0; i < duration / 30; i++) {
+              const checkTime = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour, minute + i * 30));
+              const checkTimeStr = `${checkTime.getUTCHours().toString().padStart(2, '0')}:${checkTime.getUTCMinutes().toString().padStart(2, '0')}:00`;
+              if (checkTime.getUTCHours() >= 18) {
+                isAvailable = false;
+                break;
+              }
+              for (const participantId of participants) {
+                if (!availabilityMap[dateStr]?.[participantId]?.[checkTimeStr]) {
+                  isAvailable = false;
+                  break;
+                }
+              }
+              if (!isAvailable) break;
+            }
+            if (isAvailable) {
+              slots.push({
+                datetime: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour, minute)).toISOString()
+              });
+            }
+          }
+        }
+      }
+  
+      return slots;
+    } catch (error) {
+      console.error('Error fetching all available slots:', error);
+      return [];
+    }
+  };
+
+  // const fetchAvailableSlotsForAllReuniones = async () => {
+  //   const slotsForReuniones = {};
+  //   for (const reunion of reuniones) {
+  //     const participants = reunion.meeting_participants.map(mp => mp.consultant_id);
+  //     const slots = await fetchAvailableSlots(reunion, participants, reunion.duration, project);
+  //     slotsForReuniones[reunion.id] = slots;
+  //   }
+  //   setAvailableSlots(slotsForReuniones);
+  // };
+
+  const fetchAvailableSlotsForAllReuniones = async () => {
+    const slotsForReuniones = {};
+    for (const reunion of reuniones) {
+      const participants = reunion.meeting_participants.map(mp => mp.consultant_id);
+      slotsForReuniones[reunion.id] = await fetchAllAvailableSlots(reunion, participants, reunion.duration, project);
+    }
+    setAvailableSlots(slotsForReuniones);
+  };
+
+  // const fetchAvailableSlots = async (reunion) => {
+  //   const participants = reunion.meeting_participants.map(mp => mp.consultant_id);
+  //   const duration = reunion.duration;
+
+  //   if (participants.length === 0 || !duration) {
+  //     return [];
+  //   }
+
+  //   try {
+  //     const startDate = new Date();
+  //     startDate.setHours(0, 0, 0, 0);
+  //     const endDate = new Date(startDate);
+  //     endDate.setFullYear(endDate.getFullYear() + 1);
+
+  //     const { data: availabilities, error: availabilitiesError } = await supabase
+  //       .from('availabilities')
+  //       .select('*')
+  //       .in('consultant_id', participants)
+  //       .eq('project_id', project.id)
+  //       .gte('date', startDate.toISOString().split('T')[0])
+  //       .lte('date', endDate.toISOString().split('T')[0]);
+
+  //     if (availabilitiesError) throw availabilitiesError;
+
+  //     const { data: existingMeetings, error: meetingsError } = await supabase
+  //       .from('meetings')
+  //       .select(`
+  //         id,
+  //         scheduled_at,
+  //         duration,
+  //         meeting_participants (consultant_id)
+  //       `)
+  //       .eq('project_id', project.id)
+  //       .neq('id', reunion.id)
+  //       .gte('scheduled_at', startDate.toISOString())
+  //       .lt('scheduled_at', endDate.toISOString())
+  //       .in('meeting_participants.consultant_id', participants);
+
+  //     if (meetingsError) throw meetingsError;
+
+  //     const availabilityMap = {};
+  //     availabilities.forEach(av => {
+  //       if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
+  //       if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
+  //       availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
+  //     });
+
+  //     const meetingsMap = {};
+  //     existingMeetings.forEach(meeting => {
+  //       const meetingStart = new Date(meeting.scheduled_at);
+  //       const meetingEnd = new Date(meetingStart.getTime() + meeting.duration * 60000);
+  //       meeting.meeting_participants.forEach(participant => {
+  //         if (!meetingsMap[participant.consultant_id]) {
+  //           meetingsMap[participant.consultant_id] = [];
+  //         }
+  //         meetingsMap[participant.consultant_id].push({ start: meetingStart, end: meetingEnd });
+  //       });
+  //     });
+
+  //     const slots = [];
+  //     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+  //       const dateStr = d.toISOString().split('T')[0];
+  //       for (let hour = 8; hour < 18; hour++) {
+  //         for (let minute = 0; minute < 60; minute += 30) {
+  //           const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  //           let isAvailable = true;
+  //           for (let i = 0; i < duration / 30; i++) {
+  //             const checkTime = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute + i * 30);
+  //             const checkTimeStr = `${checkTime.getHours().toString().padStart(2, '0')}:${checkTime.getMinutes().toString().padStart(2, '0')}:00`;
+  //             if (checkTime.getHours() >= 18) {
+  //               isAvailable = false;
+  //               break;
+  //             }
+  //             for (const participantId of participants) {
+  //               if (!availabilityMap[dateStr]?.[participantId]?.[checkTimeStr]) {
+  //                 isAvailable = false;
+  //                 break;
+  //               }
+  //               const participantMeetings = meetingsMap[participantId] || [];
+  //               if (participantMeetings.some(meeting => checkTime >= meeting.start && checkTime < meeting.end)) {
+  //                 isAvailable = false;
+  //                 break;
+  //               }
+  //             }
+  //             if (!isAvailable) break;
+  //           }
+  //           if (isAvailable) {
+  //             slots.push({
+  //               datetime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).toISOString()
+  //             });
+  //           }
+  //         }
+  //       }
+  //     }
+
+  //     return slots;
+  //   } catch (error) {
+  //     console.error('Error fetching available slots:', error);
+  //     return [];
+  //   }
+  // };
+
   const handleEditReunion = (reunion) => {
     setCurrentReunion(reunion);
     setIsPopupOpen(true);
@@ -106,28 +402,28 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
         if (error) throw error;
         savedReunion = data[0];
       }
-  
+
       // Actualizar participantes
       if (savedReunion.id) {
         await supabase
           .from('meeting_participants')
           .delete()
           .eq('meeting_id', savedReunion.id);
-  
+
         const newParticipants = updatedReunion.participants.map(consultantId => ({
           meeting_id: savedReunion.id,
           consultant_id: consultantId
         }));
-  
+
         if (newParticipants.length > 0) {
           const { error: insertError } = await supabase
             .from('meeting_participants')
             .insert(newParticipants);
-  
+
           if (insertError) throw insertError;
         }
       }
-  
+
       setIsPopupOpen(false);
       fetchReuniones();
     } catch (error) {
@@ -151,6 +447,42 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
       setError('No se pudo eliminar la reunión. Por favor, intenta de nuevo.');
     }
   };
+
+  const toggleReunionSelection = (reunionId) => {
+    setSelectedReuniones(prev =>
+      prev.includes(reunionId)
+        ? prev.filter(id => id !== reunionId)
+        : [...prev, reunionId]
+    );
+  };
+
+  const handleScheduleReunion = async (reunionId, scheduledAt) => {
+  try {
+    const { data, error } = await supabase
+      .from('meetings')
+      .update({ scheduled_at: scheduledAt })
+      .eq('id', reunionId)
+      .select();
+
+    if (error) throw error;
+
+    // Actualizar el estado local de las reuniones
+    setReuniones(prevReuniones => prevReuniones.map(reunion =>
+      reunion.id === reunionId ? { ...reunion, scheduled_at: scheduledAt } : reunion
+    ));
+
+    // Recalcular los slots disponibles
+    await fetchAvailableSlotsForAllReuniones();
+
+    // Mostrar mensaje de éxito
+    setSuccessMessage('Reunión programada con éxito');
+    setTimeout(() => setSuccessMessage(''), 3000);
+
+  } catch (error) {
+    console.error('Error scheduling reunion:', error);
+    setError('No se pudo programar la reunión. Por favor, intenta de nuevo.');
+  }
+};
 
   if (isLoading) return <p>Cargando reuniones...</p>;
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
@@ -190,7 +522,7 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
               </td>
               <td>
                 {reunion.meeting_participants
-                  .filter(mp => consultants.find(c => c.id === mp.consultant_id && c.role === 'consultant'))
+                  .filter(mp => consultants.find(c => c.id === mp.consultant_id && (c.role === 'consultant' || c.role === 'admin' || c.role === 'director')))
                   .map(mp => {
                     const consultant = consultants.find(c => c.id === mp.consultant_id);
                     return `${consultant.name} (${consultant.area})`;
@@ -210,6 +542,26 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
           ))}
         </tbody>
       </table>
+      <div className="reuniones-controls">
+        <div className="reunion-filters">
+          {reuniones.map(reunion => (
+            <label key={reunion.id}>
+              <input
+                type="checkbox"
+                checked={selectedReuniones.includes(reunion.id)}
+                onChange={() => toggleReunionSelection(reunion.id)}
+              />
+              {reunion.name}
+            </label>
+          ))}
+        </div>
+      </div>
+      <AvailabilityCalendar
+        availableSlots={availableSlots}
+        selectedReuniones={selectedReuniones}
+        reuniones={reuniones}
+        onScheduleReunion={handleScheduleReunion}
+      />
       <Popup isOpen={isPopupOpen} onClose={() => setIsPopupOpen(false)}>
         <EditReunionForm
           reunion={currentReunion || { name: '', duration: 30, participants: [] }}
@@ -232,7 +584,7 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) =>
   const [selectedDateTime, setSelectedDateTime] = useState(reunion.scheduled_at || '');
   const [availableSlots, setAvailableSlots] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+
 
   const toggleParticipant = (consultantId) => {
     setParticipants(prev => {
@@ -243,220 +595,20 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) =>
     });
   };
 
-  // const fetchAvailableSlots = async () => {
-  //   console.log('fetchAvailableSlots called');
-  //   console.log('Current participants:', participants);
-  //   console.log('Current duration:', duration);
-
-  //   if (participants.length === 0 || !duration) {
-  //     console.log('No participants or duration set, clearing available slots');
-  //     setAvailableSlots([]);
-  //     return;
-  //   }
-
-  //   setIsLoading(true);
-  //   try {
-  //     const startDate = new Date();
-  //     startDate.setHours(0, 0, 0, 0);
-  //     const endDate = new Date(startDate);
-  //     endDate.setFullYear(endDate.getFullYear() + 1); // Buscar disponibilidad hasta un año en el futuro
-
-  //     console.log('Fetching availabilities for date range:', startDate, 'to', endDate);
-
-  //     const { data: availabilities, error } = await supabase
-  //       .from('availabilities')
-  //       .select('*')
-  //       .in('consultant_id', participants)
-  //       .eq('project_id', project.id)
-  //       .gte('date', startDate.toISOString().split('T')[0])
-  //       .lte('date', endDate.toISOString().split('T')[0]);
-
-  //     if (error) throw error;
-
-  //     console.log('Fetched availabilities:', availabilities);
-
-  //     const availabilityMap = {};
-  //     availabilities.forEach(av => {
-  //       if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
-  //       if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
-  //       availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
-  //     });
-
-  //     console.log('Availability map:', availabilityMap);
-
-  //     const slots = [];
-  //     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-  //       const dateStr = d.toISOString().split('T')[0];
-  //       // console.log('Checking date:', dateStr);
-  //       for (let hour = 8; hour < 18; hour++) {
-  //         for (let minute = 0; minute < 60; minute += 30) {
-  //           const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  //           // console.log('Checking time:', timeStr);
-  //           let isAvailable = true;
-  //           for (let i = 0; i < duration / 30; i++) {
-  //             const checkTime = new Date(d.getTime() + (hour * 60 + minute + i * 30) * 60000);
-  //             const checkTimeStr = `${checkTime.getHours().toString().padStart(2, '0')}:${checkTime.getMinutes().toString().padStart(2, '0')}:00`;
-  //             if (checkTime.getHours() >= 18) {
-  //               // console.log('Time exceeds 18:00, not available');
-  //               isAvailable = false;
-  //               break;
-  //             }
-  //             for (const participantId of participants) {
-  //               if (!availabilityMap[dateStr]?.[participantId]?.[checkTimeStr]) {
-  //                 // console.log(`Not available: date=${dateStr}, time=${checkTimeStr}, participant=${participantId}`);
-  //                 isAvailable = false;
-  //                 break;
-  //               }
-  //             }
-  //             if (!isAvailable) break;
-  //           }
-  //           if (isAvailable) {
-  //             console.log(`Available slot found: date=${dateStr}, time=${timeStr}`);
-  //             slots.push({
-  //               datetime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).toISOString()
-  //             });
-  //           }
-  //         }
-  //       }
-  //     }
-
-  //     console.log('Final available slots:', slots);
-  //     setAvailableSlots(slots);
-  //   } catch (error) {
-  //     console.error('Error fetching available slots:', error);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  const fetchAvailableSlots = async () => {
-    console.log('fetchAvailableSlots called');
-    console.log('Current participants:', participants);
-    console.log('Current duration:', duration);
-  
-    if (participants.length === 0 || !duration) {
-      console.log('No participants or duration set, clearing available slots');
-      setAvailableSlots([]);
-      return;
-    }
-  
-    setIsLoading(true);
-    try {
-      const startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(startDate);
-      endDate.setFullYear(endDate.getFullYear() + 1); // Buscar disponibilidad hasta un año en el futuro
-  
-      console.log('Fetching availabilities for date range:', startDate, 'to', endDate);
-  
-      // Fetch availabilities
-      const { data: availabilities, error: availabilitiesError } = await supabase
-        .from('availabilities')
-        .select('*')
-        .in('consultant_id', participants)
-        .eq('project_id', project.id)
-        .gte('date', startDate.toISOString().split('T')[0])
-        .lte('date', endDate.toISOString().split('T')[0]);
-  
-      if (availabilitiesError) throw availabilitiesError;
-  
-      // Fetch existing meetings for the participants
-      const { data: existingMeetings, error: meetingsError } = await supabase
-        .from('meetings')
-        .select(`
-          id,
-          scheduled_at,
-          duration,
-          meeting_participants (consultant_id)
-        `)
-        .eq('project_id', project.id)
-        .gte('scheduled_at', startDate.toISOString())
-        .lt('scheduled_at', endDate.toISOString())
-        .in('meeting_participants.consultant_id', participants);
-  
-      if (meetingsError) throw meetingsError;
-  
-      console.log('Fetched availabilities:', availabilities);
-      console.log('Fetched existing meetings:', existingMeetings);
-  
-      const availabilityMap = {};
-      availabilities.forEach(av => {
-        if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
-        if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
-        availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
-      });
-  
-      // Create a map of existing meetings
-      const meetingsMap = {};
-      existingMeetings.forEach(meeting => {
-        const meetingStart = new Date(meeting.scheduled_at);
-        const meetingEnd = new Date(meetingStart.getTime() + meeting.duration * 60000);
-        meeting.meeting_participants.forEach(participant => {
-          if (!meetingsMap[participant.consultant_id]) {
-            meetingsMap[participant.consultant_id] = [];
-          }
-          meetingsMap[participant.consultant_id].push({ start: meetingStart, end: meetingEnd });
-        });
-      });
-  
-      console.log('Availability map:', availabilityMap);
-      console.log('Meetings map:', meetingsMap);
-  
-      const slots = [];
-      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        for (let hour = 8; hour < 18; hour++) {
-          for (let minute = 0; minute < 60; minute += 30) {
-            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            let isAvailable = true;
-            for (let i = 0; i < duration / 30; i++) {
-              const checkTime = new Date(d.getTime() + (hour * 60 + minute + i * 30) * 60000);
-              const checkTimeStr = `${checkTime.getHours().toString().padStart(2, '0')}:${checkTime.getMinutes().toString().padStart(2, '0')}:00`;
-              if (checkTime.getHours() >= 18) {
-                isAvailable = false;
-                break;
-              }
-              for (const participantId of participants) {
-                if (!availabilityMap[dateStr]?.[participantId]?.[checkTimeStr]) {
-                  isAvailable = false;
-                  break;
-                }
-                // Check if the participant has a meeting at this time
-                const participantMeetings = meetingsMap[participantId] || [];
-                if (participantMeetings.some(meeting => 
-                  checkTime >= meeting.start && checkTime < meeting.end
-                )) {
-                  isAvailable = false;
-                  break;
-                }
-              }
-              if (!isAvailable) break;
-            }
-            if (isAvailable) {
-              console.log(`Available slot found: date=${dateStr}, time=${timeStr}`);
-              slots.push({
-                datetime: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).toISOString()
-              });
-            }
-          }
-        }
-      }
-  
-      console.log('Final available slots:', slots);
-      setAvailableSlots(slots);
-    } catch (error) {
-      console.error('Error fetching available slots:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    console.log('useEffect triggered');
-    console.log('Current participants:', participants);
-    console.log('Current duration:', duration);
-    fetchAvailableSlots();
-  }, [participants, duration]);
+    const fetchSlots = async () => {
+      setIsLoading(true);
+      const slots = await fetchAvailableSlots(reunion, participants, duration, project);
+      setAvailableSlots(slots);
+      setIsLoading(false);
+    };
+
+    if (participants.length > 0 && duration) {
+      fetchSlots();
+    } else {
+      setAvailableSlots([]);
+    }
+  }, [participants, duration, reunion, project]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -466,7 +618,7 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) =>
   // console.log("Consultants EditReunion: ", consultants)
 
   const clientes = consultants.filter(c => c.role === 'client');
-  const consultoresInternos = consultants.filter(c => c.role === 'consultant');
+  const consultoresInternos = consultants.filter(c => c.role === 'consultant' || c.role === 'admin' || c.role === 'director');
 
   console.log('Clientes:', clientes);
   console.log('Consultores internos:', consultoresInternos);
@@ -485,7 +637,7 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) =>
           className="form-control"
         />
       </div>
-      
+
       <div className="form-group">
         <label htmlFor="reunion-duration">Duración:</label>
         <select
