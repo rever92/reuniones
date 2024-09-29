@@ -1,8 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import '../styles/DisponibilidadTab.css';
 import AvailabilityTable from './AvailabilityTable';
-import { Box, Typography } from '@mui/material';
+import { 
+  Box, 
+  Typography, 
+  Button, 
+  Accordion, 
+  AccordionSummary, 
+  AccordionDetails,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  Paper,
+  IconButton
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 const DisponibilidadTab = ({ project, userRole, consultant }) => {
   const [disponibilidad, setDisponibilidad] = useState({});
@@ -12,6 +26,7 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
   const [selectedReuniones, setSelectedReuniones] = useState([]);
   const [semanaActual, setSemanaActual] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -174,14 +189,20 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
   }, [disponibilidad]);
 
 
-  const obtenerSemana = (fecha) => {
-    const primerDia = new Date(fecha);
-    primerDia.setDate(primerDia.getDate() - primerDia.getDay() + 1);
+  const obtenerSemana = useCallback((fecha) => {
+    const primerDia = getWeekStartDate(fecha);
     return Array.from({ length: 5 }, (_, i) => {
       const dia = new Date(primerDia);
       dia.setDate(dia.getDate() + i);
       return dia;
     });
+  }, []);
+
+  const getWeekStartDate = (date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    return new Date(d.setDate(diff));
   };
 
   const cambiarSemana = (incremento) => {
@@ -246,35 +267,35 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
     return horariosDisponibles;
   }, [reuniones, disponibilidad, semanaActual, estaDisponible]);
 
-  const handleReunionSelect = (reunionId) => {
-    setSelectedReuniones(prev => {
-      const isSelected = prev.includes(reunionId);
-      const newSelection = isSelected
-        ? prev.filter(id => id !== reunionId)
-        : [...prev, reunionId];
+  // const handleReunionSelect = (reunionId) => {
+  //   setSelectedReuniones(prev => {
+  //     const isSelected = prev.includes(reunionId);
+  //     const newSelection = isSelected
+  //       ? prev.filter(id => id !== reunionId)
+  //       : [...prev, reunionId];
 
-      const reunion = reuniones.find(r => r.id === reunionId);
-      if (reunion) {
-        const participantes = reunion.meeting_participants.map(mp => mp.consultant_id);
-        setSelectedConsultants(prevConsultants => {
-          if (isSelected) {
-            // Si se deselecciona la reunión, quitamos los consultantes que solo pertenecen a esta reunión
-            return prevConsultants.filter(consultantId =>
-              newSelection.some(selectedReunionId =>
-                reuniones.find(r => r.id === selectedReunionId)
-                  .meeting_participants.some(mp => mp.consultant_id === consultantId)
-              )
-            );
-          } else {
-            // Si se selecciona la reunión, añadimos los participantes que no estén ya seleccionados
-            return [...new Set([...prevConsultants, ...participantes])];
-          }
-        });
-      }
+  //     const reunion = reuniones.find(r => r.id === reunionId);
+  //     if (reunion) {
+  //       const participantes = reunion.meeting_participants.map(mp => mp.consultant_id);
+  //       setSelectedConsultants(prevConsultants => {
+  //         if (isSelected) {
+  //           // Si se deselecciona la reunión, quitamos los consultantes que solo pertenecen a esta reunión
+  //           return prevConsultants.filter(consultantId =>
+  //             newSelection.some(selectedReunionId =>
+  //               reuniones.find(r => r.id === selectedReunionId)
+  //                 .meeting_participants.some(mp => mp.consultant_id === consultantId)
+  //             )
+  //           );
+  //         } else {
+  //           // Si se selecciona la reunión, añadimos los participantes que no estén ya seleccionados
+  //           return [...new Set([...prevConsultants, ...participantes])];
+  //         }
+  //       });
+  //     }
 
-      return newSelection;
-    });
-  };
+  //     return newSelection;
+  //   });
+  // };
 
   const handleSelectAllConsultants = () => {
     setSelectedConsultants(consultants.map(c => c.id));
@@ -284,58 +305,142 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
     setSelectedConsultants([]);
   };
 
+  const handleSelectAllReuniones = () => {
+    const newSelectedReuniones = reuniones.map(r => r.id);
+    setSelectedReuniones(newSelectedReuniones);
+    updateSelectedConsultantsBasedOnReuniones(newSelectedReuniones);
+  };
+
+  const handleDeselectAllReuniones = () => {
+    setSelectedReuniones([]);
+    setSelectedConsultants([]);
+  };
+
+
+  const updateSelectedConsultantsBasedOnReuniones = (selectedReunionesIds) => {
+    const consultantsToSelect = new Set();
+    selectedReunionesIds.forEach(reunionId => {
+      const reunion = reuniones.find(r => r.id === reunionId);
+      if (reunion) {
+        reunion.meeting_participants.forEach(participant => {
+          consultantsToSelect.add(participant.consultant_id);
+        });
+      }
+    });
+    setSelectedConsultants(Array.from(consultantsToSelect));
+  };
+
+  const handleReunionSelect = (reunionId) => {
+    setSelectedReuniones(prev => {
+      const isSelected = prev.includes(reunionId);
+      const newSelection = isSelected
+        ? prev.filter(id => id !== reunionId)
+        : [...prev, reunionId];
+
+      updateSelectedConsultantsBasedOnReuniones(newSelection);
+      return newSelection;
+    });
+  };
+
+  useEffect(() => {
+    // Inicializar semanaActual con la fecha actual
+    setSemanaActual(new Date());
+  }, []);
+
   if (isLoading) {
-    return <div>Cargando...</div>;
+    return <Typography>Cargando...</Typography>;
   }
 
+  const weekStartDate = getWeekStartDate(semanaActual);
+
   return (
-    <div className="card disponibilidad-container">
-      <h2>Disponibilidad</h2>
+    <Box sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+      <Typography variant="h4" gutterBottom>Disponibilidad</Typography>
+      
       {userRole === 'director' && (
-        <div className="filtros">
-          <h3>Filtros</h3>
-          <div className="form-group">
-            <h4>Consultores</h4>
-            <button onClick={handleSelectAllConsultants} className="btn btn-secondary">Seleccionar todos</button>
-            <button onClick={handleDeselectAllConsultants} className="btn btn-secondary">Deseleccionar todos</button>
-            {consultants.map(c => (
-              <label key={c.id} className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={selectedConsultants.includes(c.id)}
-                  onChange={() => {
-                    setSelectedConsultants(prev =>
-                      prev.includes(c.id)
-                        ? prev.filter(id => id !== c.id)
-                        : [...prev, c.id]
-                    );
-                  }}
-                />
-                {c.name}
-              </label>
-            ))}
-          </div>
-          <div className="form-group">
-            <h4>Reuniones</h4>
-            {reuniones.map(r => (
-              <label key={r.id} className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={selectedReuniones.includes(r.id)}
-                  onChange={() => handleReunionSelect(r.id)}
-                />
-                {r.name}
-              </label>
-            ))}
-          </div>
-        </div>
+        <Accordion 
+          expanded={filtersExpanded} 
+          onChange={() => setFiltersExpanded(!filtersExpanded)}
+          sx={{ mb: 2 }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>Filtros</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="h6" gutterBottom>Consultores</Typography>
+                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                  <Button variant="outlined" size="small" onClick={handleSelectAllConsultants}>
+                    Seleccionar todos
+                  </Button>
+                  <Button variant="outlined" size="small" onClick={handleDeselectAllConsultants}>
+                    Deseleccionar todos
+                  </Button>
+                </Box>
+                <FormGroup>
+                  {consultants.map(c => (
+                    <FormControlLabel
+                      key={c.id}
+                      control={
+                        <Checkbox
+                          checked={selectedConsultants.includes(c.id)}
+                          onChange={() => {
+                            setSelectedConsultants(prev =>
+                              prev.includes(c.id)
+                                ? prev.filter(id => id !== c.id)
+                                : [...prev, c.id]
+                            );
+                          }}
+                        />
+                      }
+                      label={c.name}
+                    />
+                  ))}
+                </FormGroup>
+              </Box>
+              <Box>
+                <Typography variant="h6" gutterBottom>Reuniones</Typography>
+                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                  <Button variant="outlined" size="small" onClick={handleSelectAllReuniones}>
+                    Seleccionar todas
+                  </Button>
+                  <Button variant="outlined" size="small" onClick={handleDeselectAllReuniones}>
+                    Deseleccionar todas
+                  </Button>
+                </Box>
+                <FormGroup>
+                  {reuniones.map(r => (
+                    <FormControlLabel
+                      key={r.id}
+                      control={
+                        <Checkbox
+                          checked={selectedReuniones.includes(r.id)}
+                          onChange={() => handleReunionSelect(r.id)}
+                        />
+                      }
+                      label={r.name}
+                    />
+                  ))}
+                </FormGroup>
+              </Box>
+            </Box>
+          </AccordionDetails>
+        </Accordion>
       )}
-      <div className="calendario">
-        <div className="navegacion-semana">
-          <button onClick={() => cambiarSemana(-1)} className="btn btn-primary">Semana Anterior</button>
-          <span>{semanaActual.toDateString()}</span>
-          <button onClick={() => cambiarSemana(1)} className="btn btn-primary">Semana Siguiente</button>
-        </div>
+
+      <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <IconButton onClick={() => cambiarSemana(-1)}>
+            <ChevronLeftIcon />
+          </IconButton>
+          <Typography variant="h6">
+            Semana del {weekStartDate.toLocaleDateString()}
+          </Typography>
+          <IconButton onClick={() => cambiarSemana(1)}>
+            <ChevronRightIcon />
+          </IconButton>
+        </Box>
         <AvailabilityTable
           week={obtenerSemana(semanaActual)}
           consultants={consultants}
@@ -343,55 +448,17 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
           actualizarDisponibilidad={actualizarDisponibilidad}
           selectedConsultants={selectedConsultants}
         />
-        {/* <table>
-          <thead>
-            <tr>
-              <th>Hora</th>
-              {obtenerSemana(semanaActual).map((dia, index) => (
-                <th key={index}>
-                  {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'][index]} {dia.getDate()}/{dia.getMonth() + 1}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 19 }, (_, i) => i + 16).map(hora => (
-              <tr key={hora}>
-                <td>{formatearHora(hora / 2)}</td>
-                {obtenerSemana(semanaActual).map((dia, index) => (
-                  <td key={index}>
-                    <div className="disponibilidad-celda">
-                      {(userRole === 'director' ? selectedConsultants : [consultant.id]).map(consultantId => {
-                        const consultantName = consultants.find(c => c.id === consultantId)?.name || '';
-                        const fechaStr = dia.toISOString().split('T')[0];
-                        const horaStr = formatearHora(hora / 2);
-                        const isDisponible = estaDisponible(consultantId, fechaStr, horaStr);
-                        return (
-                          <button
-                            key={consultantId}
-                            onClick={() => actualizarDisponibilidad(consultantId, dia, hora / 2)}
-                            className={`disponibilidad-boton ${isDisponible ? 'disponible' : 'no-disponible'}`}
-                          >
-                            {obtenerIniciales(consultantName)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table> */}
-      </div>
+      </Paper>
+
+
       {userRole === 'director' && (
-        <div className="horarios-compatibles">
-          <h3>Horarios Compatibles para Reuniones</h3>
+        <Paper elevation={3} sx={{ p: 2 }}>
+          <Typography variant="h5" gutterBottom>Horarios Compatibles para Reuniones</Typography>
           {reuniones.map(reunion => {
             const horarios = encontrarHorariosCompatibles[reunion.id] || [];
             return (
-              <div key={reunion.id} className="reunion-horarios">
-                <h4>{reunion.name} ({reunion.duration} minutos)</h4>
+              <Box key={reunion.id} sx={{ mb: 2 }}>
+                <Typography variant="h6">{reunion.name} ({reunion.duration} minutos)</Typography>
                 {horarios.length > 0 ? (
                   <ul>
                     {horarios.map((horario, index) => (
@@ -401,14 +468,14 @@ const DisponibilidadTab = ({ project, userRole, consultant }) => {
                     ))}
                   </ul>
                 ) : (
-                  <p>No hay horarios compatibles para esta reunión.</p>
+                  <Typography>No hay horarios compatibles para esta reunión.</Typography>
                 )}
-              </div>
+              </Box>
             );
           })}
-        </div>
+        </Paper>
       )}
-    </div>
+    </Box>
   );
 };
 

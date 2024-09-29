@@ -2,6 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import Popup from './Popup';
 import AvailabilityCalendar from './AvailabilityCalendar';
+import {
+  Typography,
+  Box,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Checkbox,
+  FormControlLabel,
+  Grid,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Snackbar,
+  Alert,
+} from '@mui/material';
 
 const fetchAvailableSlots = async (reunion, participants, duration, project) => {
   if (!participants || participants.length === 0 || !duration) {
@@ -184,13 +206,13 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
     if (!participants || participants.length === 0 || !duration) {
       return [];
     }
-  
+
     try {
       const startDate = new Date();
       startDate.setUTCHours(0, 0, 0, 0);
       const endDate = new Date(startDate);
       endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
-  
+
       const { data: availabilities, error: availabilitiesError } = await supabase
         .from('availabilities')
         .select('*')
@@ -198,16 +220,16 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
         .eq('project_id', project.id)
         .gte('date', startDate.toISOString().split('T')[0])
         .lte('date', endDate.toISOString().split('T')[0]);
-  
+
       if (availabilitiesError) throw availabilitiesError;
-  
+
       const availabilityMap = {};
       availabilities.forEach(av => {
         if (!availabilityMap[av.date]) availabilityMap[av.date] = {};
         if (!availabilityMap[av.date][av.consultant_id]) availabilityMap[av.date][av.consultant_id] = {};
         availabilityMap[av.date][av.consultant_id][av.time] = av.is_available;
       });
-  
+
       const slots = [];
       for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
@@ -238,7 +260,7 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
           }
         }
       }
-  
+
       return slots;
     } catch (error) {
       console.error('Error fetching all available slots:', error);
@@ -375,15 +397,18 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
   const handleSaveReunion = async (updatedReunion) => {
     try {
       let savedReunion;
+      const reunionData = {
+        name: updatedReunion.name,
+        duration: updatedReunion.duration,
+        scheduled_at: updatedReunion.scheduled_at || null,
+        project_id: project.id
+      };
+
       if (updatedReunion.id) {
         // Actualizar reunión existente
         const { data, error } = await supabase
           .from('meetings')
-          .update({
-            name: updatedReunion.name,
-            duration: updatedReunion.duration,
-            scheduled_at: updatedReunion.scheduled_at
-          })
+          .update(reunionData)
           .eq('id', updatedReunion.id)
           .select();
         if (error) throw error;
@@ -392,12 +417,7 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
         // Crear nueva reunión
         const { data, error } = await supabase
           .from('meetings')
-          .insert([{
-            name: updatedReunion.name,
-            duration: updatedReunion.duration,
-            scheduled_at: updatedReunion.scheduled_at,
-            project_id: project.id
-          }])
+          .insert([reunionData])
           .select();
         if (error) throw error;
         savedReunion = data[0];
@@ -426,6 +446,7 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
 
       setIsPopupOpen(false);
       fetchReuniones();
+      setSuccessMessage('Reunión guardada con éxito');
     } catch (error) {
       console.error('Error saving reunion:', error);
       setError('No se pudo guardar la reunión. Por favor, intenta de nuevo.');
@@ -457,105 +478,120 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
   };
 
   const handleScheduleReunion = async (reunionId, scheduledAt) => {
-  try {
-    const { data, error } = await supabase
-      .from('meetings')
-      .update({ scheduled_at: scheduledAt })
-      .eq('id', reunionId)
-      .select();
+    try {
+      const { data, error } = await supabase
+        .from('meetings')
+        .update({ scheduled_at: scheduledAt })
+        .eq('id', reunionId)
+        .select();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Actualizar el estado local de las reuniones
-    setReuniones(prevReuniones => prevReuniones.map(reunion =>
-      reunion.id === reunionId ? { ...reunion, scheduled_at: scheduledAt } : reunion
-    ));
+      // Actualizar el estado local de las reuniones
+      setReuniones(prevReuniones => prevReuniones.map(reunion =>
+        reunion.id === reunionId ? { ...reunion, scheduled_at: scheduledAt } : reunion
+      ));
 
-    // Recalcular los slots disponibles
-    await fetchAvailableSlotsForAllReuniones();
+      // Recalcular los slots disponibles
+      await fetchAvailableSlotsForAllReuniones();
 
-    // Mostrar mensaje de éxito
-    setSuccessMessage('Reunión programada con éxito');
-    setTimeout(() => setSuccessMessage(''), 3000);
+      // Mostrar mensaje de éxito
+      setSuccessMessage(scheduledAt ? 'Reunión programada con éxito' : 'Fecha de reunión eliminada con éxito');
+      setTimeout(() => setSuccessMessage(''), 3000);
 
-  } catch (error) {
-    console.error('Error scheduling reunion:', error);
-    setError('No se pudo programar la reunión. Por favor, intenta de nuevo.');
-  }
-};
+    } catch (error) {
+      console.error('Error scheduling reunion:', error);
+      setError('No se pudo actualizar la reunión. Por favor, intenta de nuevo.');
+    }
+  };
 
   if (isLoading) return <p>Cargando reuniones...</p>;
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
 
   return (
-    <div className="card reuniones-container">
-      <h2>Reuniones del Proyecto</h2>
+    <Box className="reuniones-container">
+      <Typography variant="h4" gutterBottom>Reuniones del Proyecto</Typography>
       {userRole === 'director' && (
-        <button className="btn btn-primary" onClick={() => handleEditReunion({ name: '', duration: 30, participants: [] })}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => handleEditReunion({ name: '', duration: 30, participants: [] })}
+          sx={{ mb: 2 }}
+        >
           Crear Nueva Reunión
-        </button>
+        </Button>
       )}
-      <table className="reuniones-table">
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Duración</th>
-            <th>Clientes</th>
-            <th>Consultores</th>
-            <th>Fecha y hora</th>
-            {userRole === 'director' && <th>Acciones</th>}
-          </tr>
-        </thead>
-        <tbody>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Nombre</TableCell>
+              <TableCell>Duración</TableCell>
+              <TableCell>Clientes</TableCell>
+              <TableCell>Consultores</TableCell>
+              <TableCell>Fecha y hora</TableCell>
+              {userRole === 'director' && <TableCell>Acciones</TableCell>}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {reuniones.map(reunion => (
+              <TableRow key={reunion.id}>
+                <TableCell>{reunion.name}</TableCell>
+                <TableCell>{reunion.duration} minutos</TableCell>
+                <TableCell>
+                  {reunion.meeting_participants
+                    .filter(mp => consultants.find(c => c.id === mp.consultant_id && c.role === 'client'))
+                    .map(mp => {
+                      const consultant = consultants.find(c => c.id === mp.consultant_id);
+                      return `${consultant.name} (${consultant.area})`;
+                    })
+                    .join(', ')}
+                </TableCell>
+                <TableCell>
+                  {reunion.meeting_participants
+                    .filter(mp => consultants.find(c => c.id === mp.consultant_id && (c.role === 'consultant' || c.role === 'admin' || c.role === 'director')))
+                    .map(mp => {
+                      const consultant = consultants.find(c => c.id === mp.consultant_id);
+                      return `${consultant.name} (${consultant.area})`;
+                    })
+                    .join(', ')}
+                </TableCell>
+                <TableCell>
+                  {reunion.scheduled_at ? new Date(reunion.scheduled_at).toLocaleString() : "Sin definir"}
+                </TableCell>
+                {userRole === 'director' && (
+                  <TableCell>
+                    <Button variant="outlined" onClick={() => handleEditReunion(reunion)} sx={{ mr: 1 }}>Editar</Button>
+                    <Button variant="outlined" color="error" onClick={() => handleDeleteReunion(reunion.id)}>Eliminar</Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Box sx={{ mt: 4, mb: 2 }}>
+        <Typography variant="h5">Calendario de reuniones</Typography>
+      </Box>
+
+      <Box className="reuniones-controls">
+        <Grid container spacing={2}>
           {reuniones.map(reunion => (
-            <tr key={reunion.id}>
-              <td>{reunion.name}</td>
-              <td>{reunion.duration} minutos</td>
-              <td>
-                {reunion.meeting_participants
-                  .filter(mp => consultants.find(c => c.id === mp.consultant_id && c.role === 'client'))
-                  .map(mp => {
-                    const consultant = consultants.find(c => c.id === mp.consultant_id);
-                    return `${consultant.name} (${consultant.area})`;
-                  })
-                  .join(', ')}
-              </td>
-              <td>
-                {reunion.meeting_participants
-                  .filter(mp => consultants.find(c => c.id === mp.consultant_id && (c.role === 'consultant' || c.role === 'admin' || c.role === 'director')))
-                  .map(mp => {
-                    const consultant = consultants.find(c => c.id === mp.consultant_id);
-                    return `${consultant.name} (${consultant.area})`;
-                  })
-                  .join(', ')}
-              </td>
-              <td>
-                {reunion.scheduled_at ? new Date(reunion.scheduled_at).toLocaleString() : "Sin definir"}
-              </td>
-              {userRole === 'director' && (
-                <td>
-                  <button className="btn btn-secondary" onClick={() => handleEditReunion(reunion)}>Editar</button>
-                  <button className="btn btn-secondary" onClick={() => handleDeleteReunion(reunion.id)}>Eliminar</button>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="reuniones-controls">
-        <div className="reunion-filters">
-          {reuniones.map(reunion => (
-            <label key={reunion.id}>
-              <input
-                type="checkbox"
-                checked={selectedReuniones.includes(reunion.id)}
-                onChange={() => toggleReunionSelection(reunion.id)}
+            <Grid item xs={12} sm={6} md={4} key={reunion.id}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={selectedReuniones.includes(reunion.id)}
+                    onChange={() => toggleReunionSelection(reunion.id)}
+                  />
+                }
+                label={reunion.name}
               />
-              {reunion.name}
-            </label>
+            </Grid>
           ))}
-        </div>
-      </div>
+        </Grid>
+      </Box>
       <AvailabilityCalendar
         availableSlots={availableSlots}
         selectedReuniones={selectedReuniones}
@@ -571,29 +607,28 @@ const ReunionesTab = ({ project, userRole, consultant }) => {
           project={project}
         />
       </Popup>
-    </div>
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={6000}
+        onClose={() => setSuccessMessage('')}
+      >
+        <Alert onClose={() => setSuccessMessage('')} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 };
 
 const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) => {
-  const [name, setName] = useState(reunion.name);
-  const [duration, setDuration] = useState(reunion.duration);
+  const [name, setName] = useState(reunion.name || '');
+  const [duration, setDuration] = useState(reunion.duration || 30);
   const [participants, setParticipants] = useState(
     reunion.meeting_participants?.map(mp => mp.consultant_id) || []
   );
   const [selectedDateTime, setSelectedDateTime] = useState(reunion.scheduled_at || '');
   const [availableSlots, setAvailableSlots] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-
-
-  const toggleParticipant = (consultantId) => {
-    setParticipants(prev => {
-      const newParticipants = prev.includes(consultantId)
-        ? prev.filter(id => id !== consultantId)
-        : [...prev, consultantId];
-      return newParticipants;
-    });
-  };
 
   useEffect(() => {
     const fetchSlots = async () => {
@@ -610,104 +645,130 @@ const EditReunionForm = ({ reunion, consultants, onSave, onCancel, project }) =>
     }
   }, [participants, duration, reunion, project]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ ...reunion, name, duration, participants, scheduled_at: selectedDateTime });
+  const toggleParticipant = (consultantId) => {
+    setParticipants(prev => {
+      const newParticipants = prev.includes(consultantId)
+        ? prev.filter(id => id !== consultantId)
+        : [...prev, consultantId];
+      return newParticipants;
+    });
   };
 
-  // console.log("Consultants EditReunion: ", consultants)
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({
+      ...reunion,
+      name,
+      duration,
+      participants,
+      scheduled_at: selectedDateTime || null
+    });
+  };
+
+  const handleClearDateTime = () => {
+    setSelectedDateTime('');
+  };
 
   const clientes = consultants.filter(c => c.role === 'client');
   const consultoresInternos = consultants.filter(c => c.role === 'consultant' || c.role === 'admin' || c.role === 'director');
 
-  console.log('Clientes:', clientes);
-  console.log('Consultores internos:', consultoresInternos);
 
   return (
-    <form onSubmit={handleSubmit} className="edit-reunion-form">
-      <div className="form-group">
-        <label htmlFor="reunion-name">Nombre de la reunión:</label>
-        <input
-          id="reunion-name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nombre de la reunión"
-          required
-          className="form-control"
-        />
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="reunion-duration">Duración:</label>
-        <select
-          id="reunion-duration"
-          value={duration}
-          onChange={(e) => setDuration(parseInt(e.target.value))}
-          className="form-control"
-        >
-          {[30, 60, 90, 120].map(d => (
-            <option key={d} value={d}>{d} minutos</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="participants-section">
-        <h4>Clientes:</h4>
-        <div className="participants-list">
-          {clientes.map(cliente => (
-            <label key={cliente.id} className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={participants.includes(cliente.id)}
-                onChange={() => toggleParticipant(cliente.id)}
-              />
-              {cliente.name} ({cliente.area})
-            </label>
-          ))}
-        </div>
-
-        <h4>Consultores:</h4>
-        <div className="participants-list">
-          {consultoresInternos.map(consultor => (
-            <label key={consultor.id} className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={participants.includes(consultor.id)}
-                onChange={() => toggleParticipant(consultor.id)}
-              />
-              {consultor.name} ({consultor.area})
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="form-group">
-        <h4>Horarios disponibles:</h4>
-        {isLoading ? (
-          <p>Cargando horarios disponibles...</p>
-        ) : (
-          <select
-            value={selectedDateTime}
-            onChange={(e) => setSelectedDateTime(e.target.value)}
-            className="form-control"
-          >
-            <option value="">Seleccione un horario</option>
-            {availableSlots.map((slot, index) => (
-              <option key={index} value={slot.datetime}>
-                {new Date(slot.datetime).toLocaleString()}
-              </option>
+    <Box component="form" onSubmit={handleSubmit} className="edit-reunion-form">
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            label="Nombre de la reunión"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <FormControl fullWidth>
+            <InputLabel>Duración</InputLabel>
+            <Select
+              value={duration}
+              onChange={(e) => setDuration(parseInt(e.target.value))}
+            >
+              {[30, 60, 90, 120].map(d => (
+                <MenuItem key={d} value={d}>{d} minutos</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12}>
+          <Typography variant="h6">Clientes:</Typography>
+          <Grid container>
+            {clientes.map(cliente => (
+              <Grid item xs={12} sm={6} key={cliente.id}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={participants.includes(cliente.id)}
+                      onChange={() => toggleParticipant(cliente.id)}
+                    />
+                  }
+                  label={`${cliente.name} (${cliente.area})`}
+                />
+              </Grid>
             ))}
-          </select>
-        )}
-      </div>
-
-      <div className="form-actions">
-        <button type="submit" className="btn btn-primary">Guardar</button>
-        <button type="button" onClick={onCancel} className="btn btn-secondary">Cancelar</button>
-      </div>
-    </form>
+          </Grid>
+        </Grid>
+        <Grid item xs={12}>
+          <Typography variant="h6">Consultores:</Typography>
+          <Grid container>
+            {consultoresInternos.map(consultor => (
+              <Grid item xs={12} sm={6} key={consultor.id}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={participants.includes(consultor.id)}
+                      onChange={() => toggleParticipant(consultor.id)}
+                    />
+                  }
+                  label={`${consultor.name} (${consultor.area})`}
+                />
+              </Grid>
+            ))}
+          </Grid>
+        </Grid>
+        <Grid item xs={12}>
+          <Typography variant="h6">Horarios disponibles:</Typography>
+          {isLoading ? (
+            <Typography>Cargando horarios disponibles...</Typography>
+          ) : (
+            <FormControl fullWidth>
+              <Select
+                value={selectedDateTime}
+                onChange={(e) => setSelectedDateTime(e.target.value)}
+              >
+                <MenuItem value="">Seleccione un horario</MenuItem>
+                {availableSlots.map((slot, index) => (
+                  <MenuItem key={index} value={slot.datetime}>
+                    {new Date(slot.datetime).toLocaleString()}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          {selectedDateTime && (
+            <Button onClick={handleClearDateTime} color="secondary">
+              Borrar fecha y hora
+            </Button>
+          )}
+        </Grid>
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button onClick={onCancel}>Cancelar</Button>
+            <Button type="submit" variant="contained" color="primary">Guardar</Button>
+          </Box>
+        </Grid>
+      </Grid>
+    </Box>
   );
 };
+
 
 export default ReunionesTab;

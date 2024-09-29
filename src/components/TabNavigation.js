@@ -1,27 +1,19 @@
 import React from 'react';
+import { Tabs, Tab, Box } from '@mui/material';
 
 const TabNavigation = ({ activeTab, setActiveTab, userRole }) => {
+  const handleChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
   return (
-    <div className="tab-navigation">
-      <button 
-        onClick={() => setActiveTab('consultores')}
-        className={`tab-button ${activeTab === 'consultores' ? 'active' : ''}`}
-      >
-        Consultores
-      </button>
-      <button 
-        onClick={() => setActiveTab('reuniones')}
-        className={`tab-button ${activeTab === 'reuniones' ? 'active' : ''}`}
-      >
-        Reuniones
-      </button>
-      <button 
-        onClick={() => setActiveTab('disponibilidad')}
-        className={`tab-button ${activeTab === 'disponibilidad' ? 'active' : ''}`}
-      >
-        Disponibilidad
-      </button>
-    </div>
+    <Box sx={{ width: '100%', borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+      <Tabs value={activeTab} onChange={handleChange} aria-label="project navigation tabs">
+        <Tab label="Consultores" value="consultores" />
+        <Tab label="Reuniones" value="reuniones" />
+        <Tab label="Disponibilidad" value="disponibilidad" />
+      </Tabs>
+    </Box>
   );
 };
 

@@ -1,6 +1,53 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import '../styles/ConsultoresTab.css';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Paper, 
+  Button, 
+  TextField, 
+  Tabs, 
+  Tab, 
+  Box, 
+  Typography
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
+
+const StyledTableContainer = styled(TableContainer)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+}));
+
+const StyledTableHead = styled(TableHead)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.main,
+  '& .MuiTableCell-head': {
+    color: 'black', // Cambiado a negro para mayor legibilidad
+    fontWeight: 'bold',
+  },
+}));
+
+const StyledTabs = styled(Tabs)(({ theme }) => ({
+  '& .MuiTab-root': {
+    '&:hover': {
+      backgroundColor: 'rgba(0, 0, 0, 0.04)', // Gris claro en hover
+    },
+  },
+}));
+
+const StyledButton = styled(Button)(({ theme }) => ({
+  marginRight: theme.spacing(1),
+}));
+
+const PinkButton = styled(Button)(({ theme }) => ({
+  backgroundColor: '#ff0099',
+  color: 'white',
+  '&:hover': {
+    backgroundColor: '#e5008a',
+  },
+}));
 
 const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant, refreshTrigger }) => {
   const [users, setUsers] = useState([]);
@@ -89,86 +136,95 @@ const ConsultoresTab = ({ project, userRole, consultant, onNewConsultant, refres
 
 
   const renderUserTable = (userType) => (
-    <table className="users-table">
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>Email</th>
-          <th>Área</th>
-          <th>Rol en el proyecto</th>
-          <th>Rol general</th>
-          {userRole === 'director' && <th>Acciones</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {users
-          .filter(user => user.role === userType)
-          .map(user => (
-            <tr key={user.id}>
-              <td>{user.name}</td>
-              <td>{user.email}</td>
-              <td>{user.area}</td>
-              <td>{user.projectRole}</td>
-              <td>{user.role}</td>
-              {userRole === 'director' && (
-                <td>
-                  <button onClick={() => removeUserFromProject(user.id)} className="btn btn-danger">
-                    Quitar del Proyecto
-                  </button>
-                </td>
-              )}
-            </tr>
-          ))}
-      </tbody>
-    </table>
+    <StyledTableContainer component={Paper}>
+      <Table>
+        <StyledTableHead>
+          <TableRow>
+            <TableCell>Nombre</TableCell>
+            <TableCell>Email</TableCell>
+            <TableCell>Área</TableCell>
+            <TableCell>Rol en el proyecto</TableCell>
+            <TableCell>Rol general</TableCell>
+            {userRole === 'director' && <TableCell>Acciones</TableCell>}
+          </TableRow>
+        </StyledTableHead>
+        <TableBody>
+          {users
+            .filter(user => {
+              if (userType === 'consultores') {
+                return ['consultant', 'admin', 'director'].includes(user.role);
+              } else {
+                return user.role === 'client';
+              }
+            })
+            .map(user => (
+              <TableRow key={user.id}>
+                <TableCell>{user.name}</TableCell>
+                <TableCell>{user.email}</TableCell>
+                <TableCell>{user.area}</TableCell>
+                <TableCell>{user.projectRole}</TableCell>
+                <TableCell>{user.role}</TableCell>
+                {userRole === 'director' && (
+                  <TableCell>
+                    <Button 
+                      onClick={() => removeUserFromProject(user.id)} 
+                      variant="contained" 
+                      color="error"
+                      size="small"
+                    >
+                      Quitar del Proyecto
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+        </TableBody>
+      </Table>
+    </StyledTableContainer>
   );
 
   return (
-    <div className="card consultores-container">
-      <h2>Consultores y Clientes del Proyecto</h2>
-      <div className="tabs">
-        <button
-          className={activeTab === 'consultores' ? 'active' : ''}
-          onClick={() => setActiveTab('consultores')}
-        >
-          Consultores
-        </button>
-        <button
-          className={activeTab === 'clientes' ? 'active' : ''}
-          onClick={() => setActiveTab('clientes')}
-        >
-          Clientes
-        </button>
-      </div>
-      <div className="tab-content">
-        {activeTab === 'consultores' ? renderUserTable('consultant') : renderUserTable('client')}
-      </div>
+    <Box>
+      <Typography variant="h5" gutterBottom>Consultores y Clientes del Proyecto</Typography>
+      <StyledTabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
+        <Tab label="Consultores" value="consultores" />
+        <Tab label="Clientes" value="clientes" />
+      </StyledTabs>
+      <Box sx={{ mt: 2 }}>
+        {renderUserTable(activeTab)}
+      </Box>
       {userRole === 'director' && (
-        <div className="search-bar">
-          <input
-            type="text"
+        <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+          <TextField
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar consultores..."
-            className="form-control"
+            variant="outlined"
+            size="small"
+            sx={{ mr: 1 }}
           />
-          <button onClick={searchConsultants} className="btn btn-primary">Buscar</button>
-          <button onClick={onNewConsultant} className="btn btn-secondary">Nuevo Usuario</button>
-        </div>
+          <StyledButton onClick={searchConsultants} variant="contained" color="primary">
+            Buscar
+          </StyledButton>
+          <PinkButton onClick={onNewConsultant} variant="contained">
+            Nuevo Usuario
+          </PinkButton>
+        </Box>
       )}
       {searchResults.map(c => (
-        <li key={c.id} className="consultor-item">
-          <span>{c.name} - {c.email}</span>
-          <button
+        <Box key={c.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', my: 1 }}>
+          <Typography>{c.name} - {c.email}</Typography>
+          <Button
             onClick={() => assignConsultant(c.id)}
-            className={`btn ${assignedConsultants.includes(c.id) ? 'btn-secondary' : 'btn-primary'}`}
+            variant="contained"
+            color={assignedConsultants.includes(c.id) ? "secondary" : "primary"}
             disabled={assignedConsultants.includes(c.id)}
           >
             {assignedConsultants.includes(c.id) ? 'Ya asignado' : 'Asignar al proyecto'}
-          </button>
-        </li>
+          </Button>
+        </Box>
       ))}
-    </div>
+    </Box>
   );
 };
 

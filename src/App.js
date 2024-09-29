@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { CircularProgress, Box } from '@mui/material';
 import { supabase } from './supabaseClient';
+import theme from './theme'; // Asegúrate de que la ruta sea correcta
 import Auth from './components/Auth';
 import PasswordReset from './components/PasswordReset';
 import PasswordSetup from './components/PasswordSetup';
 import ProjectManager from './components/ProjectManager';
 import ProjectPage from './components/ProjectPage';
 import AppLayout from './components/AppLayout';
-import './App.css';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -29,25 +32,32 @@ function App() {
   }, []);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <CircularProgress />
+      </Box>
+    );
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/reset-password" element={<PasswordReset />} />
-        <Route path="/setup-password" element={<PasswordSetup />} />
-        {!session ? (
-          <Route path="*" element={<Auth onAuthStateChange={setSession} />} />
-        ) : (
-          <Route element={<AppLayout />}>
-            <Route index element={<ProjectManager user={session.user} />} />
-            <Route path="/project/:projectId" element={<ProjectPage user={session.user} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        )}
-      </Routes>
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <Routes>
+          <Route path="/reset-password" element={<PasswordReset />} />
+          <Route path="/setup-password" element={<PasswordSetup />} />
+          {!session ? (
+            <Route path="*" element={<Auth onAuthStateChange={setSession} />} />
+          ) : (
+            <Route element={<AppLayout />}>
+              <Route index element={<ProjectManager user={session.user} />} />
+              <Route path="/project/:projectId" element={<ProjectPage user={session.user} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          )}
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 }
 

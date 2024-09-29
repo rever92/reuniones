@@ -1,16 +1,26 @@
 import React from 'react';
-import './Popup.css';
+import { Dialog, DialogContent, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 
 const Popup = ({ isOpen, onClose, children }) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="popup-overlay">
-      <div className="popup-content">
-        <button className="close-button" onClick={onClose}>X</button>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogContent>
+        <IconButton
+          aria-label="close"
+          onClick={onClose}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: (theme) => theme.palette.grey[500],
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

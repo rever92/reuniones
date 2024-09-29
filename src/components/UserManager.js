@@ -1,5 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { 
+  Button, 
+  TextField, 
+  Select, 
+  MenuItem, 
+  FormControl, 
+  InputLabel, 
+  Typography, 
+  Box, 
+  CircularProgress,
+  Alert
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
+
+const StyledForm = styled('form')(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(2),
+  marginBottom: theme.spacing(2),
+}));
 
 const UserManager = ({ project, onClose, onUserCreated }) => {
   const [users, setUsers] = useState([]);
@@ -177,68 +197,61 @@ const UserManager = ({ project, onClose, onUserCreated }) => {
   }
 
   return (
-    <div className="user-manager-modal">
-      <div className="user-manager-content">
-        <h2 className="user-manager-title">Agregar Nuevo Usuario al Proyecto</h2>
-        {error && <p className="error-message">{error}</p>}
-        <form onSubmit={createUser} className="user-form">
-          <div className="form-group">
-            <label htmlFor="userName">Nombre del usuario</label>
-            <input
-              id="userName"
-              type="text"
-              value={newUserName}
-              onChange={(e) => setNewUserName(e.target.value)}
-              placeholder="Nombre del usuario"
-              required
-              className="form-control"
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="userEmail">Email del usuario</label>
-            <input
-              id="userEmail"
-              type="email"
-              value={newUserEmail}
-              onChange={handleEmailChange}
-              placeholder="Email del usuario"
-              required
-              className="form-control"
-            />
-            {emailError && <p className="error-message">{emailError}</p>}
-          </div>
-          <div className="form-group">
-            <label htmlFor="userArea">Área del usuario</label>
-            <input
-              id="userArea"
-              type="text"
-              value={newUserArea}
-              onChange={(e) => setNewUserArea(e.target.value)}
-              placeholder="Área del usuario"
-              required
-              className="form-control"
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="userRole">Rol del usuario</label>
-            <select
-              id="userRole"
-              value={newUserRole}
-              onChange={(e) => setNewUserRole(e.target.value)}
-              required
-              className="form-control"
-            >
-              <option value="consultant">Consultor</option>
-              <option value="client">Cliente</option>
-            </select>
-          </div>
-          <button type="submit" disabled={isLoading || !!emailError} className="btn btn-primary">
-            {isLoading ? 'Creando...' : 'Crear Usuario'}
-          </button>
-        </form>
-        <button onClick={onClose} className="btn btn-secondary">Cancelar</button>
-      </div>
-    </div>
+    <Box sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
+      <Typography variant="h5" component="h2" gutterBottom color="primary">
+        Agregar Nuevo Usuario al Proyecto
+      </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <StyledForm onSubmit={createUser}>
+        <TextField
+          label="Nombre del usuario"
+          value={newUserName}
+          onChange={(e) => setNewUserName(e.target.value)}
+          required
+          fullWidth
+        />
+        <TextField
+          label="Email del usuario"
+          type="email"
+          value={newUserEmail}
+          onChange={handleEmailChange}
+          required
+          fullWidth
+          error={!!emailError}
+          helperText={emailError}
+        />
+        <TextField
+          label="Área del usuario"
+          value={newUserArea}
+          onChange={(e) => setNewUserArea(e.target.value)}
+          required
+          fullWidth
+        />
+        <FormControl fullWidth>
+          <InputLabel>Rol del usuario</InputLabel>
+          <Select
+            value={newUserRole}
+            onChange={(e) => setNewUserRole(e.target.value)}
+            required
+          >
+            <MenuItem value="consultant">Consultor</MenuItem>
+            <MenuItem value="client">Cliente</MenuItem>
+          </Select>
+        </FormControl>
+        <Button 
+          type="submit" 
+          variant="contained" 
+          color="primary"
+          disabled={isLoading || !!emailError}
+          startIcon={isLoading && <CircularProgress size={20} color="inherit" />}
+        >
+          {isLoading ? 'Creando...' : 'Crear Usuario'}
+        </Button>
+      </StyledForm>
+      <Button onClick={onClose} variant="outlined" color="secondary">
+        Cancelar
+      </Button>
+    </Box>
   );
 };
 

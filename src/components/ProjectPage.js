@@ -5,9 +5,17 @@ import ConsultoresTab from './ConsultoresTab';
 import ReunionesTab from './ReunionesTab';
 import DisponibilidadTab from './DisponibilidadTab';
 import Popup from './Popup';
-import ConsultantManager from './ConsultantManager';
 import UserManager from './UserManager';
 import TabNavigation from './TabNavigation';
+import { Typography, Container, Box, Paper, Snackbar } from '@mui/material';
+import { styled } from '@mui/material/styles';
+
+const StyledPaper = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(3),
+  marginBottom: theme.spacing(3),
+  borderRadius: theme.shape.borderRadius,
+  boxShadow: theme.shadows[3],
+}));
 
 const ProjectPage = ({ user }) => {
   const { projectId } = useParams();
@@ -18,8 +26,9 @@ const ProjectPage = ({ user }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [refreshConsultores, setRefreshConsultores] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -114,8 +123,9 @@ const ProjectPage = ({ user }) => {
   const handleConsultantCreated = useCallback(() => {
     setIsPopupOpen(false);
     setRefreshTrigger(prev => prev + 1);
+    setSnackbarMessage('Nuevo consultor añadido con éxito');
+    setSnackbarOpen(true);
   }, []);
-
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -150,22 +160,32 @@ const ProjectPage = ({ user }) => {
     }
   };
 
-  if (isLoading) return <p>Cargando proyecto...</p>;
-  if (error) return <p className="error-message">{error}</p>;
-  if (!project) return <p>No se encontró el proyecto.</p>;
+  if (isLoading) return <Typography>Cargando proyecto...</Typography>;
+  if (error) return <Typography color="error">{error}</Typography>;
+  if (!project) return <Typography>No se encontró el proyecto.</Typography>;
 
   return (
-    <div className="project-page">
-      <h1>{project.name}</h1>
-      <p className="project-date">Creado el: {new Date(project.created_at).toLocaleDateString()}</p>
-      <TabNavigation
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        userRole={userRole}
-      />
-      <div className="tab-content">
-        {renderActiveTab()}
-      </div>
+    <Container maxWidth="lg">
+      <Box sx={{ my: 4 }}>
+        <StyledPaper elevation={3}>
+          <Typography variant="h3" component="h1" gutterBottom>
+            {project.name}
+          </Typography>
+          <Typography variant="subtitle1" gutterBottom>
+            Creado el: {new Date(project.created_at).toLocaleDateString()}
+          </Typography>
+        </StyledPaper>
+        
+        <TabNavigation
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          userRole={userRole}
+        />
+        
+        <StyledPaper elevation={3}>
+          {renderActiveTab()}
+        </StyledPaper>
+      </Box>
 
       <Popup isOpen={isPopupOpen} onClose={() => setIsPopupOpen(false)}>
         <UserManager
@@ -174,8 +194,14 @@ const ProjectPage = ({ user }) => {
           onUserCreated={handleConsultantCreated}
         />
       </Popup>
-    </div>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        message={snackbarMessage}
+      />
+    </Container>
   );
 };
-
 export default ProjectPage;
